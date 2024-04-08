@@ -2,13 +2,13 @@ const isDev = process.env.NODE_ENV === "development";
 
 const webpack = require("webpack");
 const path = require("path");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 module.exports = {
   mode: isDev ? "development" : "production",
-  entry: "./src/index.ts",
+  entry: "./src/index.tsx",
   output: {
     path: path.resolve(__dirname, "public"),
-    publicPath: "/public/",
     filename: "bundle.js",
   },
   resolve: {
@@ -29,6 +29,7 @@ module.exports = {
   },
 
   plugins: [
+    new HtmlWebpackPlugin({ template: "./src/index.html" }),
     new webpack.DefinePlugin({
       CANVAS_RENDERER: JSON.stringify(true),
       WEBGL_RENDERER: JSON.stringify(true),
