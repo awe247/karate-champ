@@ -14,6 +14,7 @@ module.exports = (io) => {
     console.log(
       `A socket connection to the server has been made: ${socket.id}`
     );
+
     socket.on("joinRoom", (roomKey) => {
       socket.join(roomKey);
       const roomInfo = gameRooms[roomKey];
@@ -90,6 +91,7 @@ module.exports = (io) => {
         ? socket.emit("keyIsValid", input)
         : socket.emit("keyNotValid");
     });
+
     // get a random code for the room
     socket.on("getRoomCode", async function () {
       let key = codeGenerator();

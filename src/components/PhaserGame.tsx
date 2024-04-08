@@ -1,5 +1,5 @@
-import React, { forwardRef, useRef, useLayoutEffect } from "react";
-import { AUTO, Game } from "phaser";
+import React, { forwardRef, useRef, useEffect, useLayoutEffect } from "react";
+import { AUTO, Game, Scene, Events } from "phaser";
 import { Main } from "../scenes/Main";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -36,18 +36,20 @@ class StartGame extends Game {
   }
 }
 
+export const EventBus = new Events.EventEmitter();
+
 export interface IRefPhaserGame {
-  game: Phaser.Game | null;
-  scene: Phaser.Scene | null;
+  game: Game | null;
+  scene: Scene | null;
 }
 
 interface IProps {
-  currentActiveScene?: (scene_instance: Phaser.Scene) => void;
+  currentActiveScene?: (scene_instance: Scene) => void;
 }
 
 export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
   function PhaserGame({ currentActiveScene }, ref) {
-    const game = useRef<Phaser.Game | null>(null!);
+    const game = useRef<Game | null>(null!);
 
     useLayoutEffect(() => {
       if (game.current === null) {
@@ -69,6 +71,24 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
         }
       };
     }, [ref]);
+
+    useEffect(() => {
+      EventBus.on("current-scene-ready", (scene_instance: Scene) => {
+        if (currentActiveScene && typeof currentActiveScene === "function") {
+          currentActiveScene(scene_instance);
+        }
+
+        if (typeof ref === "function") {
+          ref({ game: game.current, scene: scene_instance });
+        } else if (ref) {
+          ref.current = { game: game.current, scene: scene_instance };
+        }
+      });
+
+      return () => {
+        EventBus.removeListener("current-scene-ready");
+      };
+    }, [currentActiveScene, ref]);
 
     return <div id="mygame"></div>;
   }

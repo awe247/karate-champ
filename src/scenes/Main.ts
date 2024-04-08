@@ -1,9 +1,12 @@
 import { Scene } from "phaser";
+import { Socket, io } from "socket.io-client";
+import { EventBus } from "../components/PhaserGame";
 
 export class Main extends Scene {
   background: Phaser.GameObjects.Image | undefined;
   title: Phaser.GameObjects.Image | undefined;
   titleTween: Phaser.Tweens.Tween | undefined;
+  socket: Socket | undefined;
 
   constructor() {
     super("Main");
@@ -18,7 +21,7 @@ export class Main extends Scene {
     const scene = this;
 
     scene.background = scene.add.image(0, 0, "background").setOrigin(0);
-    scene.title = scene.add.image(512, 384, "title").setOrigin(0.5, 0.5);
+    scene.title = scene.add.image(512, 384, "title").setOrigin(0.5);
 
     scene.titleTween = scene.tweens.add({
       targets: scene.title,
@@ -26,5 +29,9 @@ export class Main extends Scene {
       yoyo: true,
       repeat: -1,
     });
+
+    scene.socket = io();
+
+    EventBus.emit("current-scene-ready", this);
   }
 }
