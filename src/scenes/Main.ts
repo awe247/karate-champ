@@ -1,12 +1,15 @@
 import { Scene } from "phaser";
 import { Socket } from "socket.io-client";
-import { EventBus } from "../components/PhaserGame";
+import { EventBus, PlayerCollection } from "../components/PhaserGame";
 
 export class Main extends Scene {
+  roomKey: string = "";
+  socket: Socket | undefined;
   background: Phaser.GameObjects.Image | undefined;
   title: Phaser.GameObjects.Image | undefined;
   titleTween: Phaser.Tweens.Tween | undefined;
-  socket: Socket | undefined;
+  roomKeyText: Phaser.GameObjects.Text | undefined;
+  playerCountText: Phaser.GameObjects.Text | undefined;
 
   constructor() {
     super("Main");
@@ -19,6 +22,7 @@ export class Main extends Scene {
   preload() {
     this.load.image("background", "assets/bg.png");
     this.load.image("title", "assets/title.png");
+    this.load.image("ready", "assets/ready.png");
   }
 
   create() {
@@ -34,13 +38,77 @@ export class Main extends Scene {
       repeat: -1,
     });
 
+    this.roomKeyText = scene.add
+      .text(512, 300, "", {
+        backgroundColor: "#000000",
+        color: "#ffffff",
+        fontSize: "60px",
+        fontStyle: "bold",
+        fontFamily: "Tahoma, Verdana, sans-serif",
+      })
+      .setOrigin(0.5, 0);
+
+    this.playerCountText = scene.add
+      .text(512, 400, "", {
+        backgroundColor: "#000000",
+        color: "#ffffff",
+        fontSize: "40px",
+        fontStyle: "bold",
+        fontFamily: "Tahoma, Verdana, sans-serif",
+      })
+      .setOrigin(0.5, 0);
+
     EventBus.emit("current-scene-ready", this);
 
-    this.socket?.on("roomCreated", (roomKey: string) => {
-      scene.titleTween?.destroy();
-      scene.title?.destroy();
-      // scene.roomKey = roomKey;
-      // scene.roomKeyText.setText(scene.roomKey);
+    this.socket?.on(
+      "roomCreated",
+      (args: { roomKey: string; players: PlayerCollection }) => {
+        scene.titleTween?.stop();
+        scene.titleTween?.destroy();
+        scene.title?.destroy();
+        scene.roomKey = args.roomKey;
+        scene.roomKeyText?.setText(`CODE: ${scene.roomKey}`);
+        scene.playerCountText?.setText(
+          `PLAYERS: ${Object.keys(args.players).length}`
+        );
+        const ready = scene.add.image(512, 500, "ready").setOrigin(0.5, 0);
+        ready.setInteractive({ cursor: "pointer" });
+        ready.on("pointerdown", () => {
+          const { roomKey } = scene;
+          scene.socket?.emit("startGame", { roomKey });
+        });
+      }
+    );
+
+    this.socket?.on(
+      "roomJoined",
+      (args: { roomKey: string; players: PlayerCollection }) => {
+        scene.titleTween?.stop();
+        scene.titleTween?.destroy();
+        scene.title?.destroy();
+        scene.roomKey = args.roomKey;
+        scene.roomKeyText?.setText(`CODE: ${scene.roomKey}`);
+        scene.playerCountText?.setText(
+          `PLAYERS: ${Object.keys(args.players).length}`
+        );
+      }
+    );
+
+    this.socket?.on("roomUpdate", (args: { players: PlayerCollection }) => {
+      scene.playerCountText?.setText(
+        `PLAYERS: ${Object.keys(args.players).length}`
+      );
+    });
+
+    this.socket?.on("showMatchups", () => {
+      const { roomKey, socket } = scene;
+      scene.cameras.main.fadeOut(1000, 0, 0, 0);
+      scene.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          scene.scene.start("Matchups", { roomKey, socket });
+        }
+      );
     });
   }
 }

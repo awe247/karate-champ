@@ -1,11 +1,8 @@
 const gameRooms = {
   // [roomKey]: {
-  // users: [],
-  // randomTasks: [],
-  // scores: [],
-  // gameScore: 0,
-  // players: {},
-  // numPlayers: 0
+  //  players: PlayerCollection,
+  //  numPlayers: 0
+  //  started: false,
   // }
 };
 
@@ -15,9 +12,9 @@ module.exports = (io) => {
       `A socket connection to the server has been made: ${socket.id}`
     );
 
-    // get a random code for the room
-    socket.on("createGame", async function (player) {
-      console.log(player);
+    // create and join the room
+    socket.on("createGame", async function (args) {
+      const { playerName } = args;
       let key = codeGenerator();
       while (Object.keys(gameRooms).includes(key)) {
         key = codeGenerator();
@@ -25,51 +22,50 @@ module.exports = (io) => {
       gameRooms[key] = {
         roomKey: key,
         players: {},
-        numPlayers: 0,
+        numPlayers: 1,
+        started: false,
       };
+      gameRooms[key].players[socket.id] = {
+        id: socket.id,
+        name: playerName,
+      };
+      const { players } = gameRooms[key];
       socket.join(key);
-      socket.emit("roomCreated", key);
+      socket.emit("roomCreated", { roomKey: key, players });
     });
 
-    socket.on("joinRoom", (roomKey) => {
-      socket.join(roomKey);
-      const roomInfo = gameRooms[roomKey];
-      console.log("roomInfo", roomInfo);
-      roomInfo.players[socket.id] = {
-        rotation: 0,
-        x: 400,
-        y: 300,
-        playerId: socket.id,
+    // check for the existence of a room
+    socket.on("isCodeValid", function (args) {
+      const { joinCode } = args;
+      Object.keys(gameRooms).includes(joinCode)
+        ? socket.emit("codeIsValid", joinCode)
+        : socket.emit("codeNotValid");
+    });
+
+    // join the room
+    socket.on("joinRoom", (args) => {
+      const { playerName, joinCode } = args;
+      gameRooms[joinCode].players[socket.id] = {
+        id: socket.id,
+        name: playerName,
       };
+      socket.join(joinCode);
 
       // update number of players
-      roomInfo.numPlayers = Object.keys(roomInfo.players).length;
+      const { players } = gameRooms[joinCode];
 
-      // set initial state
-      socket.emit("setState", roomInfo);
+      gameRooms[joinCode].numPlayers = Object.keys(players).length;
 
-      // send the players object to the new player
-      socket.emit("currentPlayers", {
-        players: roomInfo.players,
-        numPlayers: roomInfo.numPlayers,
-      });
+      socket.emit("roomJoined", { roomKey: joinCode, players });
 
       // update all other players of the new player
-      socket.to(roomKey).emit("newPlayer", {
-        playerInfo: roomInfo.players[socket.id],
-        numPlayers: roomInfo.numPlayers,
-      });
+      socket.to(joinCode).emit("roomUpdate", { players });
     });
 
-    // when a player moves, update the player data
-    socket.on("playerMovement", function (data) {
-      const { x, y, roomKey } = data;
-      gameRooms[roomKey].players[socket.id].x = x;
-      gameRooms[roomKey].players[socket.id].y = y;
-      // emit a message to all players about the player that moved
-      socket
-        .to(roomKey)
-        .emit("playerMoved", gameRooms[roomKey].players[socket.id]);
+    // start the game
+    socket.on("startGame", (args) => {
+      const { roomKey } = args;
+      io.in(roomKey).emit("showMatchups");
     });
 
     // when a player disconnects, remove them from our players object
@@ -95,17 +91,10 @@ module.exports = (io) => {
         // update numPlayers
         roomInfo.numPlayers = Object.keys(roomInfo.players).length;
         // emit a message to all players to remove this player
-        io.to(roomKey).emit("disconnected", {
-          playerId: socket.id,
-          numPlayers: roomInfo.numPlayers,
+        io.to(roomKey).emit("roomUpdate", {
+          players: roomInfo.players,
         });
       }
-    });
-
-    socket.on("isKeyValid", function (input) {
-      Object.keys(gameRooms).includes(input)
-        ? socket.emit("keyIsValid", input)
-        : socket.emit("keyNotValid");
     });
   });
 };

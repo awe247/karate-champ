@@ -8,6 +8,7 @@ import React, {
 import { Socket } from "socket.io-client";
 import { AUTO, Game, Scene, Events } from "phaser";
 import { Main } from "../scenes/Main";
+import { Matchups } from "../scenes/Matchups";
 import { SocketContext } from "../socket";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -29,6 +30,8 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [],
 };
 
+export interface PlayerCollection {}
+
 class KarateChamp extends Game {
   constructor(socket: Socket | undefined) {
     // Add the config file to the game
@@ -36,11 +39,9 @@ class KarateChamp extends Game {
 
     // Add all the scenes
     this.scene.add("Main", Main);
-    // this.scene.add("WaitingRoom", WaitingRoom);
-    // this.scene.add("TaskScene", TaskScene);
+    this.scene.add("Matchups", Matchups);
 
     // Start the game with the mainscene
-    console.log("starting");
     this.scene.start("Main", { socket });
   }
 }
@@ -60,7 +61,6 @@ export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
   function PhaserGame({ currentActiveScene }, ref) {
     const game = useRef<Game | null>(null!);
     const { socket } = useContext(SocketContext) ?? {};
-    console.info(socket);
 
     useLayoutEffect(() => {
       if (game.current === null) {

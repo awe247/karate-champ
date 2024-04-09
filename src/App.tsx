@@ -11,26 +11,44 @@ export const App: React.FC = () => {
       .toString()
       .substring(1)}`
   );
+  const [joinCode, setJoinCode] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   // References to the PhaserGame component (game and scene are exposed)
   const phaserRef = useRef<IRefPhaserGame | null>(null);
 
   useEffect(() => {
     socket?.on("roomCreated", function (roomKey: string) {
-      console.log(roomKey);
       setJoinedGame(true);
-      // scene.roomKey = roomKey;
-      // scene.roomKeyText.setText(scene.roomKey);
+    });
+
+    socket?.on("codeNotValid", function () {
+      setErrorMessage("Not a valid code.");
+    });
+
+    socket?.on("codeIsValid", function (joinCode: string) {
+      setErrorMessage("");
+      socket.emit("joinRoom", { playerName, joinCode });
+    });
+
+    socket?.on("roomJoined", function () {
+      setJoinedGame(true);
     });
   }, [socket]);
 
   // Event emitted from the PhaserGame component
   const currentScene = (scene: Phaser.Scene) => {
-    console.log("scene");
+    console.log(`scene - ${scene}`);
   };
 
   const handleCreateGame = () => {
+    setErrorMessage("");
     socket?.emit("createGame", { playerName });
+  };
+
+  const handleJoinGame = () => {
+    setErrorMessage("");
+    socket?.emit("isCodeValid", { joinCode });
   };
 
   return (
@@ -107,12 +125,21 @@ export const App: React.FC = () => {
                 <label className="text-xs" htmlFor="join-code">
                   Code
                 </label>
-                <input className="txt" type="text" id="join-code" />
+                <input
+                  className="txt"
+                  type="text"
+                  id="join-code"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                />
               </div>
               <div className="content-end">
-                <div className="btn">Join</div>
+                <div className="btn" onClick={handleJoinGame}>
+                  Join
+                </div>
               </div>
             </div>
+            <div className="text-red-600 text-xs">{errorMessage}</div>
           </div>
         </div>
       )}
