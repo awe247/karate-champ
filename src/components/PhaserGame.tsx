@@ -1,6 +1,14 @@
-import React, { forwardRef, useRef, useEffect, useLayoutEffect } from "react";
+import React, {
+  forwardRef,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useContext,
+} from "react";
+import { Socket } from "socket.io-client";
 import { AUTO, Game, Scene, Events } from "phaser";
 import { Main } from "../scenes/Main";
+import { SocketContext } from "../socket";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: AUTO,
@@ -21,8 +29,8 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [],
 };
 
-class StartGame extends Game {
-  constructor() {
+class KarateChamp extends Game {
+  constructor(socket: Socket | undefined) {
     // Add the config file to the game
     super(config);
 
@@ -32,7 +40,8 @@ class StartGame extends Game {
     // this.scene.add("TaskScene", TaskScene);
 
     // Start the game with the mainscene
-    this.scene.start("Main");
+    console.log("starting");
+    this.scene.start("Main", { socket });
   }
 }
 
@@ -50,10 +59,12 @@ interface IProps {
 export const PhaserGame = forwardRef<IRefPhaserGame, IProps>(
   function PhaserGame({ currentActiveScene }, ref) {
     const game = useRef<Game | null>(null!);
+    const { socket } = useContext(SocketContext) ?? {};
+    console.info(socket);
 
     useLayoutEffect(() => {
       if (game.current === null) {
-        game.current = new StartGame();
+        game.current = new KarateChamp(socket);
 
         if (typeof ref === "function") {
           ref({ game: game.current, scene: null });

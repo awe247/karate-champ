@@ -1,5 +1,5 @@
 import { Scene } from "phaser";
-import { Socket, io } from "socket.io-client";
+import { Socket } from "socket.io-client";
 import { EventBus } from "../components/PhaserGame";
 
 export class Main extends Scene {
@@ -12,6 +12,10 @@ export class Main extends Scene {
     super("Main");
   }
 
+  init(data: { socket: Socket }) {
+    this.socket = data.socket;
+  }
+
   preload() {
     this.load.image("background", "assets/bg.png");
     this.load.image("title", "assets/title.png");
@@ -20,18 +24,23 @@ export class Main extends Scene {
   create() {
     const scene = this;
 
-    scene.background = scene.add.image(0, 0, "background").setOrigin(0);
-    scene.title = scene.add.image(512, 384, "title").setOrigin(0.5);
+    this.background = scene.add.image(0, 0, "background").setOrigin(0);
+    this.title = scene.add.image(512, 384, "title").setOrigin(0.5);
 
-    scene.titleTween = scene.tweens.add({
+    this.titleTween = scene.tweens.add({
       targets: scene.title,
       scale: { value: 1.3, duration: 700, ease: "Back.easeInOut" },
       yoyo: true,
       repeat: -1,
     });
 
-    scene.socket = io();
-
     EventBus.emit("current-scene-ready", this);
+
+    this.socket?.on("roomCreated", (roomKey: string) => {
+      scene.titleTween?.destroy();
+      scene.title?.destroy();
+      // scene.roomKey = roomKey;
+      // scene.roomKeyText.setText(scene.roomKey);
+    });
   }
 }

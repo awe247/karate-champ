@@ -15,6 +15,22 @@ module.exports = (io) => {
       `A socket connection to the server has been made: ${socket.id}`
     );
 
+    // get a random code for the room
+    socket.on("createGame", async function (player) {
+      console.log(player);
+      let key = codeGenerator();
+      while (Object.keys(gameRooms).includes(key)) {
+        key = codeGenerator();
+      }
+      gameRooms[key] = {
+        roomKey: key,
+        players: {},
+        numPlayers: 0,
+      };
+      socket.join(key);
+      socket.emit("roomCreated", key);
+    });
+
     socket.on("joinRoom", (roomKey) => {
       socket.join(roomKey);
       const roomInfo = gameRooms[roomKey];
@@ -90,20 +106,6 @@ module.exports = (io) => {
       Object.keys(gameRooms).includes(input)
         ? socket.emit("keyIsValid", input)
         : socket.emit("keyNotValid");
-    });
-
-    // get a random code for the room
-    socket.on("getRoomCode", async function () {
-      let key = codeGenerator();
-      while (Object.keys(gameRooms).includes(key)) {
-        key = codeGenerator();
-      }
-      gameRooms[key] = {
-        roomKey: key,
-        players: {},
-        numPlayers: 0,
-      };
-      socket.emit("roomCreated", key);
     });
   });
 };
