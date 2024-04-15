@@ -9,6 +9,7 @@ import { Socket } from "socket.io-client";
 import { AUTO, Game, Scene, Events } from "phaser";
 import { Main } from "../scenes/Main";
 import { Matchups } from "../scenes/Matchups";
+import { Fight } from "../scenes/Fight";
 import { SocketContext } from "../socket";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -23,14 +24,30 @@ const config: Phaser.Types.Core.GameConfig = {
     parent: "mygame",
     autoCenter: Phaser.Scale.Center.CENTER_HORIZONTALLY,
   },
-  backgroundColor: "#028af8",
+  backgroundColor: "#000000",
   dom: {
     createContainer: true,
   },
   scene: [],
 };
 
-export interface PlayerCollection {}
+export interface Player {
+  id: string;
+  name: string;
+  hairColor: string;
+  skinColor: string;
+  eyeColor: string;
+  giColor: string;
+}
+
+export interface PlayerMap {
+  [id: string]: Player;
+}
+
+export interface RoundResult {
+  name: string;
+  battles: string[];
+}
 
 class KarateChamp extends Game {
   constructor(socket: Socket | undefined) {
@@ -40,6 +57,7 @@ class KarateChamp extends Game {
     // Add all the scenes
     this.scene.add("Main", Main);
     this.scene.add("Matchups", Matchups);
+    this.scene.add("Fight", Fight);
 
     // Start the game with the mainscene
     this.scene.start("Main", { socket });

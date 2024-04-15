@@ -1,6 +1,6 @@
 import { Scene } from "phaser";
 import { Socket } from "socket.io-client";
-import { EventBus, PlayerCollection } from "../components/PhaserGame";
+import { EventBus, PlayerMap } from "../components/PhaserGame";
 
 export class Main extends Scene {
   roomKey: string = "";
@@ -62,7 +62,7 @@ export class Main extends Scene {
 
     this.socket?.on(
       "roomCreated",
-      (args: { roomKey: string; players: PlayerCollection }) => {
+      (args: { roomKey: string; players: PlayerMap }) => {
         scene.titleTween?.stop();
         scene.titleTween?.destroy();
         scene.title?.destroy();
@@ -82,7 +82,7 @@ export class Main extends Scene {
 
     this.socket?.on(
       "roomJoined",
-      (args: { roomKey: string; players: PlayerCollection }) => {
+      (args: { roomKey: string; players: PlayerMap }) => {
         scene.titleTween?.stop();
         scene.titleTween?.destroy();
         scene.title?.destroy();
@@ -94,21 +94,31 @@ export class Main extends Scene {
       }
     );
 
-    this.socket?.on("roomUpdate", (args: { players: PlayerCollection }) => {
+    this.socket?.on("roomUpdate", (args: { players: PlayerMap }) => {
       scene.playerCountText?.setText(
         `PLAYERS: ${Object.keys(args.players).length}`
       );
     });
 
-    this.socket?.on("showMatchups", () => {
-      const { roomKey, socket } = scene;
-      scene.cameras.main.fadeOut(1000, 0, 0, 0);
-      scene.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          scene.scene.start("Matchups", { roomKey, socket });
-        }
-      );
-    });
+    this.socket?.on(
+      "showMatchups",
+      (args: { rounds: []; currentRound: number; currentBattle: number }) => {
+        const { roomKey, socket } = scene;
+        const { rounds, currentRound, currentBattle } = args;
+        scene.cameras.main.fadeOut(500, 0, 0, 0);
+        scene.cameras.main.once(
+          Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+          () => {
+            scene.scene.start("Matchups", {
+              roomKey,
+              socket,
+              rounds,
+              currentRound,
+              currentBattle,
+            });
+          }
+        );
+      }
+    );
   }
 }

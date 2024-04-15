@@ -3,6 +3,13 @@ import { SocketContext } from "./socket";
 import { PhaserGame, IRefPhaserGame } from "./components/PhaserGame";
 import { PlayerDisplay } from "./components/PlayerDisplay";
 
+function generateRandomHexColor(): string {
+  const r = Math.floor(Math.random() * 256);
+  const g = Math.floor(Math.random() * 256);
+  const b = Math.floor(Math.random() * 256);
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
 export const App: React.FC = () => {
   const { socket } = useContext(SocketContext) ?? {};
   const [joinedGame, setJoinedGame] = useState(false);
@@ -11,6 +18,10 @@ export const App: React.FC = () => {
       .toString()
       .substring(1)}`
   );
+  const [hairColor, setHairColor] = useState(generateRandomHexColor());
+  const [skinColor, setSkinColor] = useState(generateRandomHexColor());
+  const [eyeColor, setEyeColor] = useState(generateRandomHexColor());
+  const [giColor, setGiColor] = useState(generateRandomHexColor());
   const [joinCode, setJoinCode] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -22,8 +33,8 @@ export const App: React.FC = () => {
       setJoinedGame(true);
     });
 
-    socket?.on("codeNotValid", function () {
-      setErrorMessage("Not a valid code.");
+    socket?.on("codeNotValid", function (message: string) {
+      setErrorMessage(message ?? "Not a valid code.");
     });
 
     socket?.on("codeIsValid", function (joinCode: string) {
@@ -38,7 +49,7 @@ export const App: React.FC = () => {
 
   // Event emitted from the PhaserGame component
   const currentScene = (scene: Phaser.Scene) => {
-    console.log(`scene - ${scene}`);
+    //console.log("scene");
   };
 
   const handleCreateGame = () => {
@@ -65,16 +76,17 @@ export const App: React.FC = () => {
               className="txt"
               type="text"
               id="player-name"
+              maxLength={20}
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
             />
             <div className="flex flex-row">
               <div className="w-1/2">
                 <PlayerDisplay
-                  hairColor="#efd738"
-                  skinColor="#ffeedb"
-                  eyeColor="#00ff00"
-                  giColor="#ff0000"
+                  hairColor={hairColor}
+                  skinColor={skinColor}
+                  eyeColor={eyeColor}
+                  giColor={giColor}
                 />
               </div>
               <div className="flex flex-col mx-auto">
@@ -85,7 +97,8 @@ export const App: React.FC = () => {
                   className="clr"
                   type="color"
                   id="hair-color"
-                  value="#efd738"
+                  value={hairColor}
+                  onChange={(e) => setHairColor(e.target.value)}
                 ></input>
                 <label className="text-xs block" htmlFor="skin-color">
                   Skin
@@ -94,7 +107,8 @@ export const App: React.FC = () => {
                   className="clr"
                   type="color"
                   id="skin-color"
-                  value="#ffeedb"
+                  value={skinColor}
+                  onChange={(e) => setSkinColor(e.target.value)}
                 ></input>
                 <label className="text-xs block" htmlFor="eye-color">
                   Eyes
@@ -103,7 +117,8 @@ export const App: React.FC = () => {
                   className="clr"
                   type="color"
                   id="eye-color"
-                  value="#0000ff"
+                  value={eyeColor}
+                  onChange={(e) => setEyeColor(e.target.value)}
                 ></input>
                 <label className="text-xs block" htmlFor="gi-color">
                   Gi
@@ -112,7 +127,8 @@ export const App: React.FC = () => {
                   className="clr"
                   type="color"
                   id="gi-color"
-                  value="#ffffff"
+                  value={giColor}
+                  onChange={(e) => setGiColor(e.target.value)}
                 ></input>
               </div>
             </div>
@@ -129,6 +145,7 @@ export const App: React.FC = () => {
                   className="txt"
                   type="text"
                   id="join-code"
+                  maxLength={5}
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value)}
                 />
