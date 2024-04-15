@@ -100,6 +100,7 @@ export class Matchups extends Scene {
       scene.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
+          this.sound.stopAll();
           scene.scene.start("Fight", {});
         }
       );
