@@ -31,7 +31,11 @@ export class Matchups extends Scene {
 
   preload() {
     this.load.image("background2", "assets/bg2.png");
-    this.load.audio("matchups-song", "assets/audio/matchups.mp3");
+    this.load.audio("fight-song", "assets/audio/fight.mp3");
+    this.load.on("complete", () => {
+      // TEST
+      console.error("load complete matchups");
+    });
   }
 
   create() {
@@ -45,7 +49,7 @@ export class Matchups extends Scene {
     }
 
     this.graphics = this.add.graphics();
-    this.graphics.lineStyle(2, 0x000000, 1);
+    this.graphics.lineStyle(1, 0x000000, 1);
 
     this.rounds.forEach((round, idx) => {
       const xPos = 512 + idx * 400 - this.currentRound * 400;

@@ -124,10 +124,6 @@ module.exports = (io) => {
         currentRound,
         currentBattle,
       });
-
-      setTimeout(() => {
-        io.in(roomKey).emit("fight", {});
-      }, 10000);
     });
 
     // when a player disconnects, remove them from our players object

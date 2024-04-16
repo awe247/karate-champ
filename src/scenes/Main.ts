@@ -23,6 +23,7 @@ export class Main extends Scene {
     this.load.image("background", "assets/bg.png");
     this.load.image("title", "assets/title.png");
     this.load.image("ready", "assets/ready.png");
+    this.load.audio("matchups-song", "assets/audio/matchups.mp3");
   }
 
   create() {

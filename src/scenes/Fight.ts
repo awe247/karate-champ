@@ -21,11 +21,13 @@ export class Fight extends Scene {
   }
 
   preload() {
-    this.load.image("background", "assets/bg.png");
     this.load.image("ready-title", "assets/readyTitle.png");
     this.load.image("fight-title", "assets/fightTitle.png");
     this.load.audio("ready-fight", "assets/audio/ready-fight.mp3");
-    this.load.audio("fight-song", "assets/audio/fight.mp3");
+    this.load.on("complete", () => {
+      // TEST
+      console.error("load complete fight");
+    });
   }
 
   create() {

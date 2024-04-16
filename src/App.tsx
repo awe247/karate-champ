@@ -81,7 +81,7 @@ export const App: React.FC = () => {
               onChange={(e) => setPlayerName(e.target.value)}
             />
             <div className="flex flex-row">
-              <div className="w-1/2">
+              <div className="w-1/2 pl-10 py-5">
                 <PlayerDisplay
                   hairColor={hairColor}
                   skinColor={skinColor}
@@ -134,7 +134,7 @@ export const App: React.FC = () => {
             </div>
             <h3 className="font-bold">Tournament</h3>
             <div className="btn" onClick={handleCreateGame}>
-              Create
+              Host
             </div>
             <div className="flex flex-row space-x-2">
               <div className="w-full">
