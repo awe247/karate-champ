@@ -49,6 +49,16 @@ export interface RoundResult {
   battles: string[];
 }
 
+export interface PlayerBattle extends Player {
+  health: number;
+}
+
+export interface Battle {
+  player1: PlayerBattle;
+  player2?: PlayerBattle;
+  time: number;
+}
+
 class KarateChamp extends Game {
   constructor(socket: Socket | undefined) {
     // Add the config file to the game

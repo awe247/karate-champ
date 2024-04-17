@@ -31,11 +31,6 @@ export class Matchups extends Scene {
 
   preload() {
     this.load.image("background2", "assets/bg2.png");
-    this.load.audio("fight-song", "assets/audio/fight.mp3");
-    this.load.on("complete", () => {
-      // TEST
-      console.error("load complete matchups");
-    });
   }
 
   create() {
@@ -94,7 +89,9 @@ export class Matchups extends Scene {
       });
     });
 
-    this.socket?.on("fight", () => {
+    this.socket?.on("fight", (args) => {
+      const { roomKey, socket } = scene;
+      const { battle } = args;
       scene.tweens.add({
         targets: scene.sound.get("matchups-song"),
         volume: 0,
@@ -105,7 +102,7 @@ export class Matchups extends Scene {
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
           this.sound.stopAll();
-          scene.scene.start("Fight", {});
+          scene.scene.start("Fight", { roomKey, socket, battle });
         }
       );
     });

@@ -101,9 +101,14 @@ module.exports = (io) => {
           return result;
         }, []);
       orderedPairs.forEach((pair) => {
-        const battle = { player1: { id: pair[0], health: 100 }, time: 60 };
+        const player1 = players[pair[0]];
+        const battle = {
+          player1: { ...player1, id: pair[0], health: 100 },
+          time: 60,
+        };
         if (pair.length > 1 && pair[1] !== undefined) {
-          battle.player2 = { id: pair[1], health: 100 };
+          const player2 = players[pair[1]];
+          battle.player2 = { ...player2, id: pair[1], health: 100 };
         }
         round1.battles.push(battle);
       });
@@ -124,6 +129,11 @@ module.exports = (io) => {
         currentRound,
         currentBattle,
       });
+
+      setTimeout(() => {
+        const battle = round1.battles[currentBattle];
+        io.in(roomKey).emit("fight", { battle });
+      }, 8000);
     });
 
     // when a player disconnects, remove them from our players object

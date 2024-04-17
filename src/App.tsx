@@ -10,14 +10,14 @@ function generateRandomHexColor(): string {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
+const defaultPlayerName = `Player${(Math.floor(Math.random() * 10000) + 10000)
+  .toString()
+  .substring(1)}`;
+
 export const App: React.FC = () => {
   const { socket } = useContext(SocketContext) ?? {};
   const [joinedGame, setJoinedGame] = useState(false);
-  const [playerName, setPlayerName] = useState(
-    `Player${(Math.floor(Math.random() * 10000) + 10000)
-      .toString()
-      .substring(1)}`
-  );
+  const [playerName, setPlayerName] = useState(defaultPlayerName);
   const [hairColor, setHairColor] = useState(generateRandomHexColor());
   const [skinColor, setSkinColor] = useState(generateRandomHexColor());
   const [eyeColor, setEyeColor] = useState(generateRandomHexColor());
@@ -39,7 +39,15 @@ export const App: React.FC = () => {
 
     socket?.on("codeIsValid", function (joinCode: string) {
       setErrorMessage("");
-      socket.emit("joinRoom", { playerName, joinCode });
+      const pn = playerName?.length ? playerName : defaultPlayerName;
+      socket.emit("joinRoom", {
+        playerName: pn,
+        joinCode,
+        hairColor,
+        eyeColor,
+        skinColor,
+        giColor,
+      });
     });
 
     socket?.on("roomJoined", function () {
@@ -54,7 +62,14 @@ export const App: React.FC = () => {
 
   const handleCreateGame = () => {
     setErrorMessage("");
-    socket?.emit("createGame", { playerName });
+    const pn = playerName?.length ? playerName : defaultPlayerName;
+    socket?.emit("createGame", {
+      playerName: pn,
+      hairColor,
+      eyeColor,
+      skinColor,
+      giColor,
+    });
   };
 
   const handleJoinGame = () => {

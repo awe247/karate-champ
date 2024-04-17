@@ -17,6 +17,49 @@ export class Main extends Scene {
 
   init(data: { socket: Socket }) {
     this.socket = data.socket;
+    this.add.rectangle(512, 384, 468, 32).setStrokeStyle(1, 0xffffff);
+
+    const bar = this.add.rectangle(512 - 230, 384, 4, 28, 0xffffff);
+
+    this.load.on("progress", (progress: number) => {
+      bar.width = 4 + 460 * progress;
+    });
+
+    const scene = this;
+
+    this.load.on("complete", () => {
+      this.background = scene.add.image(0, 0, "background").setOrigin(0);
+      this.title = scene.add.image(512, 384, "title").setOrigin(0.5);
+
+      this.titleTween = scene.tweens.add({
+        targets: scene.title,
+        scale: { value: 1.3, duration: 700, ease: "Back.easeInOut" },
+        yoyo: true,
+        repeat: -1,
+      });
+
+      this.roomKeyText = scene.add
+        .text(512, 300, "", {
+          backgroundColor: "#000000",
+          color: "#ffffff",
+          fontSize: "60px",
+          fontStyle: "bold",
+          fontFamily: "Tahoma, Verdana, sans-serif",
+        })
+        .setOrigin(0.5, 0);
+
+      this.playerCountText = scene.add
+        .text(512, 400, "", {
+          backgroundColor: "#000000",
+          color: "#ffffff",
+          fontSize: "40px",
+          fontStyle: "bold",
+          fontFamily: "Tahoma, Verdana, sans-serif",
+        })
+        .setOrigin(0.5, 0);
+
+      EventBus.emit("current-scene-ready", this);
+    });
   }
 
   preload() {
@@ -24,42 +67,11 @@ export class Main extends Scene {
     this.load.image("title", "assets/title.png");
     this.load.image("ready", "assets/ready.png");
     this.load.audio("matchups-song", "assets/audio/matchups.mp3");
+    this.load.audio("fight-song", "assets/audio/fight.mp3");
   }
 
   create() {
     const scene = this;
-
-    this.background = scene.add.image(0, 0, "background").setOrigin(0);
-    this.title = scene.add.image(512, 384, "title").setOrigin(0.5);
-
-    this.titleTween = scene.tweens.add({
-      targets: scene.title,
-      scale: { value: 1.3, duration: 700, ease: "Back.easeInOut" },
-      yoyo: true,
-      repeat: -1,
-    });
-
-    this.roomKeyText = scene.add
-      .text(512, 300, "", {
-        backgroundColor: "#000000",
-        color: "#ffffff",
-        fontSize: "60px",
-        fontStyle: "bold",
-        fontFamily: "Tahoma, Verdana, sans-serif",
-      })
-      .setOrigin(0.5, 0);
-
-    this.playerCountText = scene.add
-      .text(512, 400, "", {
-        backgroundColor: "#000000",
-        color: "#ffffff",
-        fontSize: "40px",
-        fontStyle: "bold",
-        fontFamily: "Tahoma, Verdana, sans-serif",
-      })
-      .setOrigin(0.5, 0);
-
-    EventBus.emit("current-scene-ready", this);
 
     this.socket?.on(
       "roomCreated",
