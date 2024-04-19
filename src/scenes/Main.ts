@@ -1,6 +1,7 @@
 import { Scene } from "phaser";
 import { Socket } from "socket.io-client";
-import { EventBus, PlayerMap } from "../components/PhaserGame";
+import { EventBus } from "../components/PhaserGame";
+import { PlayerMap } from "../game/types";
 
 export class Main extends Scene {
   roomKey: string = "";

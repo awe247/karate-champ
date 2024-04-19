@@ -1,6 +1,8 @@
 import { Scene } from "phaser";
 import { Socket } from "socket.io-client";
-import { EventBus, RoundResult } from "../components/PhaserGame";
+import { EventBus } from "../components/PhaserGame";
+import { RoundResult } from "../game/types";
+import { getMatchupBgColor, getMatchupBgColorAsText } from "../game/utils";
 
 export class Matchups extends Scene {
   roomKey: string = "";
@@ -65,13 +67,13 @@ export class Matchups extends Scene {
         }
         if (scene.currentRound != idx || yOffset >= 0) {
           scene.graphics?.fillStyle(
-            getBgColor(idx, scene.currentRound, idy, scene.currentBattle)
+            getMatchupBgColor(idx, scene.currentRound, idy, scene.currentBattle)
           );
           scene.graphics?.fillRoundedRect(xPos - 190, yPos - 4, 380, 30, 16);
           scene.graphics?.strokeRoundedRect(xPos - 190, yPos - 4, 380, 30, 16);
           scene.add
             .text(xPos, yPos, battle, {
-              backgroundColor: getBackgroundColor(
+              backgroundColor: getMatchupBgColorAsText(
                 idx,
                 scene.currentRound,
                 idy,
@@ -109,29 +111,4 @@ export class Matchups extends Scene {
 
     EventBus.emit("current-scene-ready", this);
   }
-}
-
-function getBgColor(r: number, cr: number, b: number, cb: number): number {
-  if (r == cr && b == cb) {
-    return 0xff00ff;
-  }
-  if (r < cr || (r == cr && b < cb)) {
-    return 0xa1a1a1;
-  }
-  return 0xffffff;
-}
-
-function getBackgroundColor(
-  r: number,
-  cr: number,
-  b: number,
-  cb: number
-): string {
-  if (r == cr && b == cb) {
-    return "#ff00ff";
-  }
-  if (r < cr || (r == cr && b < cb)) {
-    return "#a1a1a1";
-  }
-  return "#ffffff";
 }
