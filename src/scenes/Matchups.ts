@@ -41,9 +41,7 @@ export class Matchups extends Scene {
     this.background2 = scene.add.image(0, 0, "background2").setOrigin(0);
     this.cameras.main.fadeIn(500, 0, 0, 0);
 
-    if (!this.sound.get("matchups-song")) {
-      this.sound.play("matchups-song", { loop: true, volume: 0.3 });
-    }
+    this.sound.play("matchups-song", { loop: true, volume: 0.3 });
 
     this.graphics = this.add.graphics();
     this.graphics.lineStyle(1, 0x000000, 1);
@@ -94,16 +92,12 @@ export class Matchups extends Scene {
     this.socket?.on("fight", (args) => {
       const { roomKey, socket } = scene;
       const { battle } = args;
-      scene.tweens.add({
-        targets: scene.sound.get("matchups-song"),
-        volume: 0,
-        duration: 500,
-      });
       scene.cameras.main.fadeOut(500, 0, 0, 0);
       scene.cameras.main.once(
         Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
         () => {
-          this.sound.stopAll();
+          scene.sound.stopByKey("matchups-song");
+          scene.scene.stop("Matchups");
           scene.scene.start("Fight", { roomKey, socket, battle });
         }
       );

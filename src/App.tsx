@@ -24,6 +24,7 @@ export const App: React.FC = () => {
   const [giColor, setGiColor] = useState(generateRandomHexColor());
   const [joinCode, setJoinCode] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   // References to the PhaserGame component (game and scene are exposed)
   const phaserRef = useRef<IRefPhaserGame | null>(null);
@@ -58,9 +59,11 @@ export const App: React.FC = () => {
   // Event emitted from the PhaserGame component
   const currentScene = (scene: Phaser.Scene) => {
     //console.log("scene");
+    setLoaded(true);
   };
 
   const handleCreateGame = () => {
+    if (!loaded) return;
     setErrorMessage("");
     const pn = playerName?.length ? playerName : defaultPlayerName;
     socket?.emit("createGame", {
@@ -73,6 +76,7 @@ export const App: React.FC = () => {
   };
 
   const handleJoinGame = () => {
+    if (!loaded) return;
     setErrorMessage("");
     socket?.emit("isCodeValid", { joinCode });
   };

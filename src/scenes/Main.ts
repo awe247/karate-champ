@@ -85,11 +85,19 @@ export class Main extends Scene {
         scene.playerCountText?.setText(
           `PLAYERS: ${Object.keys(args.players).length}`
         );
-        const ready = scene.add.image(512, 500, "ready").setOrigin(0.5, 0);
-        ready.setInteractive({ cursor: "pointer" });
-        ready.on("pointerdown", () => {
-          const { roomKey } = scene;
-          scene.socket?.emit("startGame", { roomKey });
+        const ready = scene.add
+          .image(512, 500, "ready")
+          .setOrigin(0.5, 0)
+          .setInteractive({ cursor: "pointer" })
+          .on("pointerdown", () => {
+            const { roomKey } = scene;
+            scene.socket?.emit("startGame", { roomKey });
+          });
+        ready.on("pointerover", () => {
+          ready.setTint(0xcccccc);
+        });
+        ready.on("pointerout", () => {
+          ready.clearTint();
         });
       }
     );
@@ -123,6 +131,7 @@ export class Main extends Scene {
         scene.cameras.main.once(
           Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
           () => {
+            scene.socket?.off("showMatchups");
             scene.scene.start("Matchups", {
               roomKey,
               socket,
