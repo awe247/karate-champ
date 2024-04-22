@@ -245,7 +245,7 @@ export class Fight extends Scene {
 
         if (!scene.player2KO && !scene.player1KO && moves.length > 1) {
           setTimeout(() => {
-            this.move(
+            scene.move(
               moves[1],
               args.battleUpdate.player1.health,
               args.battleUpdate.player2?.health ??
