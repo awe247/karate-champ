@@ -409,13 +409,119 @@ export class Fight extends Scene {
     this.p2ThoughtBubble.add(
       scene.add.image(750, 300, "thought-bubble").setScale(7).setFlipX(true)
     );
-
+    this.p2ThoughtText = scene.add
+      .text(755, 170, "CHOOSE...", {
+        backgroundColor: "#ffffff",
+        color: "#000000",
+        fontSize: "16px",
+        fontStyle: "bold",
+        fontFamily: "Tahoma, Verdana, sans-serif",
+      })
+      .setOrigin(0.5)
+      .setVisible(false);
+    this.p2ThoughtBubble.add(this.p2ThoughtText);
+    this.p2ThoughtEllipsis = scene.add
+      .image(755, 265, "ellipsis")
+      .setAlpha(1.0)
+      .setVisible(false);
+    scene.tweens.add({
+      targets: this.p2ThoughtEllipsis,
+      alpha: { value: 0.4, duration: 700 },
+      yoyo: true,
+      repeat: -1,
+    });
+    this.p2ThoughtAttack = scene.add.image(780, 270, "fist").setVisible(false);
+    this.p2ThoughtDefend = scene.add
+      .image(780, 270, "shield")
+      .setVisible(false);
+    this.p2ThoughtBubble.add(this.p2ThoughtEllipsis);
+    this.p2ThoughtBubble.add(this.p2ThoughtAttack);
+    this.p2ThoughtBubble.add(this.p2ThoughtDefend);
+    this.p2MoveHigh = scene.add
+      .image(720, 220, "arrow-high")
+      .setFlipX(true)
+      .setInteractive({ cursor: "pointer" })
+      .setVisible(false)
+      .on("pointerdown", () => {
+        if (
+          scene.timerCount > 0 &&
+          !scene.player1KO &&
+          !scene.player2KO &&
+          !scene.movesSent
+        ) {
+          scene.p2MoveHigh?.setTint(0x00ff00);
+          scene.handleInput(BattleAttack.High, BattleDefend.High);
+        }
+      });
+    this.p2MoveHigh.on("pointerover", () => {
+      scene.p2MoveHigh?.setTint(0xcccccc);
+    });
+    this.p2MoveHigh.on("pointerout", () => {
+      scene.p2MoveHigh?.clearTint();
+    });
+    this.p2MoveHigh.on("pointerup", () => {
+      setTimeout(() => {
+        scene.p2MoveHigh?.clearTint();
+      }, 300);
+    });
+    this.p2ThoughtBubble.add(this.p2MoveHigh);
+    this.p2MoveMid = scene.add
+      .image(720, 270, "arrow-mid")
+      .setFlipX(true)
+      .setInteractive({ cursor: "pointer" })
+      .setVisible(false)
+      .on("pointerdown", () => {
+        if (
+          scene.timerCount > 0 &&
+          !scene.player1KO &&
+          !scene.player2KO &&
+          !scene.movesSent
+        ) {
+          scene.p2MoveMid?.setTint(0x00ff00);
+          scene.handleInput(BattleAttack.Mid, BattleDefend.Mid);
+        }
+      });
+    this.p2MoveMid.on("pointerover", () => {
+      scene.p2MoveMid?.setTint(0xcccccc);
+    });
+    this.p2MoveMid.on("pointerout", () => {
+      scene.p2MoveMid?.clearTint();
+    });
+    this.p2MoveMid.on("pointerup", () => {
+      setTimeout(() => {
+        scene.p2MoveMid?.clearTint();
+      }, 300);
+    });
+    this.p2ThoughtBubble.add(this.p2MoveMid);
+    this.p2MoveLow = scene.add
+      .image(720, 320, "arrow-low")
+      .setFlipX(true)
+      .setInteractive({ cursor: "pointer" })
+      .setVisible(false)
+      .on("pointerdown", () => {
+        if (
+          scene.timerCount > 0 &&
+          !scene.player1KO &&
+          !scene.player2KO &&
+          !scene.movesSent
+        ) {
+          scene.p2MoveLow?.setTint(0x00ff00);
+          scene.handleInput(BattleAttack.Low, BattleDefend.Low);
+        }
+      });
+    this.p2MoveLow.on("pointerover", () => {
+      scene.p2MoveLow?.setTint(0xcccccc);
+    });
+    this.p2MoveLow.on("pointerout", () => {
+      scene.p2MoveLow?.clearTint();
+    });
+    this.p2MoveLow.on("pointerup", () => {
+      setTimeout(() => {
+        scene.p2MoveLow?.clearTint();
+      }, 300);
+    });
+    this.p2ThoughtBubble.add(this.p2MoveLow);
     this.p2ThoughtBubble.setVisible(false);
-
-    //   // if (this.timerText) {
-    //   //   this.timerText.text = `${args.battle.time}`;
-    //   // }
-    // });
 
     // this.socket?.on("battleComplete", async (args: { battle: Battle }) => {
     //   scene.timerCount = 0;
@@ -490,7 +596,7 @@ export class Fight extends Scene {
       scene.battle = battle;
       scene.timerCount = battle.time;
 
-      scene.showPlayer1Input();
+      scene.showPlayerInput();
     });
 
     EventBus.emit("current-scene-ready", this);
@@ -527,9 +633,7 @@ export class Fight extends Scene {
     scene.player2Sprite?.setVisible(true);
     scene.timerText?.setText(`${this.timerCount}`).setVisible(true);
 
-    setTimeout(() => {
-      scene.showPlayer1Input();
-    }, 3000);
+    setTimeout(scene.showPlayerInput, 3000);
   };
 
   handleInput = (attack: BattleAttack, defend: BattleDefend) => {
@@ -569,6 +673,7 @@ export class Fight extends Scene {
     if (scene.battle) {
       scene.battle.player1NeedInput = args.player1NeedInput;
       scene.battle.player2NeedInput = args.player2NeedInput;
+      scene.showPlayerInput();
     }
   };
 
@@ -593,14 +698,18 @@ export class Fight extends Scene {
     scene.battle = battle;
   };
 
-  showPlayer1Input = () => {
+  showPlayerInput = () => {
     const scene = this;
-    const showBubble = scene.battle?.player1NeedInput;
-    const showInputs =
+    const showBubble1 = scene.battle?.player1NeedInput;
+    const showBubble2 = scene.battle?.player2NeedInput;
+    const showInputs1 =
       scene.battle?.player1?.id === scene.socket?.id && !scene.movesSent;
-    if (showBubble) {
+    const showInputs2 =
+      scene.battle?.player2?.id === scene.socket?.id && !scene.movesSent;
+
+    if (showBubble1) {
       scene.p1ThoughtBubble?.setVisible(true);
-      if (showInputs) {
+      if (showInputs1) {
         scene.p1ThoughtEllipsis?.setVisible(false);
         scene.p1ThoughtText?.setVisible(true);
         if (scene.attackPicked !== BattleAttack.None) {
@@ -624,6 +733,34 @@ export class Fight extends Scene {
       }
     } else {
       scene.p1ThoughtBubble?.setVisible(false);
+    }
+
+    if (showBubble2) {
+      scene.p2ThoughtBubble?.setVisible(true);
+      if (showInputs2) {
+        scene.p2ThoughtEllipsis?.setVisible(false);
+        scene.p2ThoughtText?.setVisible(true);
+        if (scene.attackPicked !== BattleAttack.None) {
+          scene.p2ThoughtAttack?.setVisible(false);
+          scene.p2ThoughtDefend?.setVisible(true);
+        } else {
+          scene.p2ThoughtDefend?.setVisible(false);
+          scene.p2ThoughtAttack?.setVisible(true);
+        }
+        scene.p2MoveHigh?.setVisible(true);
+        scene.p2MoveMid?.setVisible(true);
+        scene.p2MoveLow?.setVisible(true);
+      } else {
+        scene.p2ThoughtEllipsis?.setVisible(true);
+        scene.p2ThoughtText?.setVisible(false);
+        scene.p2ThoughtAttack?.setVisible(false);
+        scene.p2ThoughtDefend?.setVisible(false);
+        scene.p2MoveHigh?.setVisible(false);
+        scene.p2MoveMid?.setVisible(false);
+        scene.p2MoveLow?.setVisible(false);
+      }
+    } else {
+      scene.p2ThoughtBubble?.setVisible(false);
     }
   };
 
