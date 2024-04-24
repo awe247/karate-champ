@@ -66,6 +66,10 @@ export function createPlayerTexture(
     return;
   }
 
+  if (scene.textures.exists(`${player?.id ?? "cpu"}-texture`)) {
+    return;
+  }
+
   let texture = scene.textures.get("player").getSourceImage();
   canvas.width = texture.width;
   canvas.height = texture.height;

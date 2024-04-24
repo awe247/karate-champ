@@ -1,7 +1,7 @@
 import { Scene } from "phaser";
 import { Socket } from "socket.io-client";
 import { EventBus } from "../components/PhaserGame";
-import { PlayerMap } from "../game/types";
+import { PlayerMap, Battle } from "../game/types";
 
 export class Main extends Scene {
   roomKey: string = "";
@@ -123,21 +123,29 @@ export class Main extends Scene {
     });
 
     this.socket?.on(
-      "showMatchups",
-      (args: { rounds: []; currentRound: number; currentBattle: number }) => {
+      "gameUpdate",
+      (args: {
+        rounds: [];
+        currentRound: number;
+        currentBattle: number;
+        battle: Battle;
+      }) => {
+        const { rounds, currentRound, currentBattle, battle } = args;
         const { roomKey, socket } = scene;
-        const { rounds, currentRound, currentBattle } = args;
         scene.cameras.main.fadeOut(500, 0, 0, 0);
         scene.cameras.main.once(
           Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
           () => {
-            scene.socket?.off("showMatchups");
-            scene.scene.start("Matchups", {
+            scene.socket?.off("gameUpdate");
+            scene.socket?.off("roomJoined");
+            scene.socket?.off("roomCreated");
+            scene.scene.start("Fight", {
               roomKey,
               socket,
               rounds,
               currentRound,
               currentBattle,
+              battle,
             });
           }
         );

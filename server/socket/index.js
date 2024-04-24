@@ -90,31 +90,82 @@ module.exports = (io) => {
       const { players } = gameRooms[roomKey];
       const currentRound = 0;
       const currentBattle = 0;
-      gameRooms[roomKey].rounds = createAllRounds(players);
+      gameRooms[roomKey].rounds = createRounds(players);
       gameRooms[roomKey].currentRound = currentRound;
       gameRooms[roomKey].currentBattle = currentBattle;
-
       const rounds = getMatchupDescriptions(gameRooms[roomKey]);
+      const battle =
+        gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
 
-      io.in(roomKey).emit("showMatchups", {
+      io.in(roomKey).emit("gameUpdate", {
+        battle,
         rounds,
         currentRound,
         currentBattle,
       });
+    });
 
-      setTimeout(() => {
+    // client has requested the latest game state
+    socket.on("needUpdate", (args) => {
+      const { roomKey } = args;
+      if (gameRooms[roomKey]?.started) {
+        const { currentRound, currentBattle } = gameRooms[roomKey];
+        const rounds = getMatchupDescriptions(gameRooms[roomKey]);
         const battle =
           gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-        io.in(roomKey).emit("fight", { battle });
-      }, 8000);
+
+        socket.emit("gameUpdate", {
+          rounds,
+          currentRound,
+          currentBattle,
+          battle,
+        });
+      }
+    });
+
+    socket.on("sendReady", (args) => {
+      const { roomKey, currentRound, currentBattle } = args;
+      if (
+        gameRooms[roomKey].started &&
+        gameRooms[roomKey].currentRound === currentRound &&
+        gameRooms[roomKey].currentBattle === currentBattle
+      ) {
+        const battle =
+          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
+
+        // want at least one of the players in the battle
+        if (
+          !battle.ready &&
+          (battle.player1?.id === socket.id || battle.player2?.id === socket.id)
+        ) {
+          battle.ready = true;
+          setTimeout(() => {
+            io.in(roomKey).emit("ready");
+            gameRooms[roomKey].timer = setInterval(() => {
+              if (battle.time > 0) {
+                battle.time--;
+                io.in(roomKey).emit("timeUpdate", { time: battle.time });
+              } else {
+                clearInterval(gameRooms[roomKey].timer);
+                // todo: send time's up
+              }
+            }, 1000);
+          }, 2000);
+        }
+      }
     });
 
     // process moves
-    socket.on("sendMoves", (args) => {
+    socket.on("sendMoves", async (args) => {
       const BLOCKED_DAMAGE = 30;
       const FULL_DAMAGE = 60;
       const { roomKey, attack, defend } = args;
       const roomInfo = gameRooms[roomKey];
+
+      console.log(
+        `room:${roomKey} player:${socket.id} (a:${attack} d:${defend})`
+      );
+
       if (roomInfo?.started) {
         let { currentRound, currentBattle } = roomInfo;
 
@@ -126,37 +177,53 @@ module.exports = (io) => {
             let winningPlayer = undefined;
 
             if (battle.player1.id === socket.id) {
+              battle.player1NeedInput = false;
+              const { player1NeedInput, player2NeedInput } = battle;
+
+              io.in(roomKey).emit("moveUpdate", {
+                player1NeedInput,
+                player2NeedInput,
+              });
+
               // if battling the cpu then resolve player1 moves first
               if (!battle.player2) {
                 const cpuAttack = getRandomInt(1, 4);
                 const cpuDefend = getRandomInt(1, 4);
 
-                //console.log(`CPU attack: ${cpuAttack} defend: ${cpuDefend}`);
+                console.log(`CPU attack: ${cpuAttack} defend: ${cpuDefend}`);
 
-                battle.moves.push({
+                const seq1 = {
                   playerId: battle.player1.id,
                   attack,
                   opponentResponse: cpuDefend,
-                });
+                };
+                battle.moves.push(seq1);
                 battle.cpuHealth -=
                   attack === cpuDefend ? BLOCKED_DAMAGE : FULL_DAMAGE;
 
-                if (battle.cpuHealth > 0) {
-                  battle.moves.push({
-                    playerId: "cpu",
-                    attack: cpuAttack,
-                    opponentResponse: defend,
+                await delay(1000).then(() => {
+                  io.in(roomKey).emit("battleUpdate", {
+                    battle,
+                    sequence: seq1,
+                    reset: false,
                   });
-                  battle.player1.health -=
-                    cpuAttack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
+                  if (battle.cpuHealth > 0) {
+                    battle.moves.push({
+                      playerId: "cpu",
+                      attack: cpuAttack,
+                      opponentResponse: defend,
+                    });
+                    battle.player1.health -=
+                      cpuAttack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
 
-                  if (battle.player1.health <= 0) {
-                    battle.winner = `CPU def. ${battle.player1.name}`;
+                    if (battle.player1.health <= 0) {
+                      battle.winner = `CPU def. ${battle.player1.name}`;
+                    }
+                  } else {
+                    battle.winner = `${battle.player1.name} def. CPU`;
+                    winningPlayer = battle.player1;
                   }
-                } else {
-                  battle.winner = `${battle.player1.name} def. CPU`;
-                  winningPlayer = battle.player1;
-                }
+                });
               } else if (battle.moves?.length > 1) {
                 battle.moves[0].opponentResponse = defend;
                 battle.moves[1].attack = attack;
@@ -195,6 +262,13 @@ module.exports = (io) => {
                 return;
               }
             } else if (battle.player2?.id === socket.id) {
+              battle.player2NeedInput = false;
+              const { player1NeedInput, player2NeedInput } = battle;
+              io.in(roomKey).emit("moveUpdate", {
+                player1NeedInput,
+                player2NeedInput,
+              });
+
               // if player1 has moved then resolve their moves first
               if (battle.moves?.length > 1) {
                 battle.moves[0].opponentResponse = defend;
@@ -235,13 +309,10 @@ module.exports = (io) => {
               }
             }
 
-            const battleUpdate = { ...battle, moves: [...battle.moves] };
-            battle.moves.length = 0;
-
-            io.in(roomKey).emit("battleUpdate", { battleUpdate });
-
             if (battle.winner) {
-              moveWinnerToNextRound(roomInfo, winningPlayer);
+              if (!moveWinnerToNextRound(roomInfo, winningPlayer)) {
+                // set final winner
+              }
 
               currentBattle++;
               if (round.battles.length <= currentBattle) {
@@ -251,24 +322,24 @@ module.exports = (io) => {
               roomInfo.currentRound = currentRound;
               roomInfo.currentBattle = currentBattle;
 
-              setTimeout(() => {
-                const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-                io.in(roomKey).emit("showMatchups", {
-                  rounds,
-                  currentRound,
-                  currentBattle,
-                });
+              // setTimeout(() => {
+              //   const rounds = getMatchupDescriptions(gameRooms[roomKey]);
+              //   io.in(roomKey).emit("showMatchups", {
+              //     rounds,
+              //     currentRound,
+              //     currentBattle,
+              //   });
 
-                if (currentRound < gameRooms[roomKey].rounds.length) {
-                  setTimeout(() => {
-                    const battle =
-                      gameRooms[roomKey].rounds[currentRound].battles[
-                        currentBattle
-                      ];
-                    io.in(roomKey).emit("fight", { battle });
-                  }, 8000);
-                }
-              }, 3000);
+              //   if (currentRound < gameRooms[roomKey].rounds.length) {
+              //     setTimeout(() => {
+              //       const battle =
+              //         gameRooms[roomKey].rounds[currentRound].battles[
+              //           currentBattle
+              //         ];
+              //       io.in(roomKey).emit("fight", { battle });
+              //     }, 8000);
+              //   }
+              // }, 3000);
             }
           }
         }
@@ -341,7 +412,9 @@ module.exports = (io) => {
 
               io.in(roomKey).emit("battleComplete", { battleUpdate });
 
-              moveWinnerToNextRound(roomInfo, winningPlayer);
+              if (!moveWinnerToNextRound(roomInfo, winningPlayer)) {
+                // set final winner
+              }
 
               currentBattle++;
               if (round.battles.length <= currentBattle) {
@@ -437,9 +510,7 @@ function getRandomInt(min, max) {
 //   return rounds;
 // }
 
-function createAllRounds(players) {
-  const rounds = [];
-
+function createRounds(players) {
   const orderedPairs = Object.values(players)
     .sort((a, b) => (a.id < b.id ? -1 : 1))
     .reduce(function (result, value, index, arr) {
@@ -449,66 +520,79 @@ function createAllRounds(players) {
       return result;
     }, []);
 
-  let battleCount = orderedPairs.length;
-  let roundCount = 1;
-  while (battleCount > 0) {
-    rounds.push({
-      name: `Round ${roundCount}`,
-      battles: Array.apply(null, Array(battleCount)).map(() => {
-        return { time: 60, moves: [] };
-      }),
-    });
-    battleCount = Math.floor(battleCount / 2);
-    roundCount++;
-  }
+  const round = {
+    name: "Round 1",
+    battles: [],
+  };
 
   orderedPairs.forEach((pair, i) => {
     const player1 = players[pair[0]];
-    rounds[0].battles[i].player1 = { ...player1, id: pair[0], health: 100 };
+    const battle = {
+      player1: { ...player1, id: pair[0], health: 100 },
+      moves: [],
+      time: 60,
+      player1NeedInput: true,
+    };
     if (pair.length > 1 && pair[1] !== undefined) {
       const player2 = players[pair[1]];
-      rounds[0].battles[i].player2 = { ...player2, id: pair[1], health: 100 };
+      battle.player2 = { ...player2, id: pair[1], health: 100 };
+      battle.player2NeedInput = true;
     } else {
-      rounds[0].battles[i].cpuHealth = 100;
+      battle.cpuHealth = 100;
     }
+    round.battles.push(battle);
   });
 
-  return rounds;
+  return [round];
 }
 
 function moveWinnerToNextRound(roomInfo, winner) {
   const { rounds, currentRound } = roomInfo;
-  if (rounds.length < currentRound + 1) {
-    const newRound = rounds[currentRound + 1];
-    newRound.battles.forEach((battle) => {
-      if (!battle.player1) {
+  let placed = false;
+  if (rounds[currentRound].battles > 1) {
+    if (rounds.length <= currentRound + 1) {
+      rounds.push({ name: `Round ${rounds.length + 1}`, battles: [] });
+    }
+    rounds[currentRound + 1].battles.forEach((battle) => {
+      if (!battle.player1 && !placed) {
         battle.player1 = { ...winner, health: 100 };
-        return;
+        placed = true;
       }
-      if (!battle.player2) {
+      if (!battle.player2 && !placed) {
         battle.player2 = { ...winner, health: 100 };
+        battle.player2NeedInput = true;
+        placed = true;
       }
     });
+    if (!placed) {
+      rounds[currentRound + 1].battles.push({
+        player1: { ...winner, health: 100 },
+        moves: [],
+        time: 60,
+        player1NeedInput: true,
+      });
+      placed = true;
+    }
   }
+  return placed;
 }
 
 function getMatchupDescriptions(roomInfo) {
   const { rounds, currentRound, currentBattle, players } = roomInfo;
-  let finalWinner = "???";
+  let finalWinner = "";
+  if (rounds[rounds.length - 1].battles.length === 1) {
+    const lastBattle = rounds[rounds.length - 1].battles[0];
+    if (!!lastBattle.winner) {
+      finalWinner =
+        lastBattle.player1.health <= 0
+          ? battle.player2?.name ?? "CPU"
+          : battle.player1.name;
+    }
+  }
   const matchups = rounds.map((round, r) => {
     return {
       name: round.name,
       battles: round.battles.map((battle, b) => {
-        if (
-          r === rounds.length - 1 &&
-          b === round.battles.length - 1 &&
-          !!battle.winner
-        ) {
-          finalWinner =
-            battle.player1.health <= 0
-              ? battle.player2?.name ?? "CPU"
-              : battle.player1.name;
-        }
         if (r < currentRound || (r === currentRound && b < currentBattle)) {
           return battle.winner;
         }
@@ -521,6 +605,12 @@ function getMatchupDescriptions(roomInfo) {
       }),
     };
   });
-  matchups.push({ name: "Winner", battles: [finalWinner] });
+  if (finalWinner?.length) {
+    matchups.push({ name: "Winner", battles: [finalWinner] });
+  }
   return matchups;
+}
+
+function delay(t, val) {
+  return new Promise((resolve) => setTimeout(resolve, t, val));
 }
