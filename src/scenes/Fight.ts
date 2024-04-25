@@ -279,6 +279,10 @@ export class Fight extends Scene {
       paused: true,
     });
 
+    this.readyTween.on("start", () => {
+      scene.fxReadyFight?.play();
+      scene.readyTitle?.setVisible(true);
+    });
     this.readyTween.on("complete", () => {
       scene.readyTitle?.setVisible(false);
       scene.fightTitle?.setVisible(true);
@@ -623,8 +627,6 @@ export class Fight extends Scene {
   handleReady = () => {
     const scene = this;
     scene.winnerText?.setText("");
-    scene.fxReadyFight?.play();
-    scene.readyTitle?.setVisible(true);
     scene.readyTween?.restart();
     scene.p1HealthBar?.setVisible(true);
     scene.p2HealthBar?.setVisible(true);
@@ -693,6 +695,11 @@ export class Fight extends Scene {
       if (reset) {
         scene.movesSent = false;
         scene.attackPicked = BattleAttack.None;
+        if (scene.battle) {
+          scene.battle.player1NeedInput = battle.player1NeedInput;
+          scene.battle.player2NeedInput = battle.player2NeedInput;
+        }
+        scene.showPlayerInput();
       }
     }
 

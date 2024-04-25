@@ -147,7 +147,7 @@ module.exports = (io) => {
                 io.in(roomKey).emit("timeUpdate", { time: battle.time });
               } else {
                 clearInterval(gameRooms[roomKey].timer);
-                gameRooms[roomKey].timer = undefined;
+                delete gameRooms[roomKey].timer;
                 // todo: send time's up
               }
             }, 1000);
@@ -204,33 +204,44 @@ module.exports = (io) => {
 
                 console.log(`CPU attack: ${cpuAttack} defend: ${cpuDefend}`);
 
-                const seq1 = {
-                  playerId: battle.player1.id,
-                  attack,
-                  opponentResponse: cpuDefend,
-                };
-                battle.moves.push(seq1);
-                battle.cpuHealth -=
-                  attack === cpuDefend ? BLOCKED_DAMAGE : FULL_DAMAGE;
+                await delay(1000).then(async () => {
+                  const seq1 = {
+                    playerId: battle.player1.id,
+                    attack,
+                    opponentResponse: cpuDefend,
+                  };
+                  battle.moves.push(seq1);
+                  battle.cpuHealth -=
+                    attack === cpuDefend ? BLOCKED_DAMAGE : FULL_DAMAGE;
 
-                await delay(1000).then(() => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
                     reset: false,
                   });
                   if (battle.cpuHealth > 0) {
-                    battle.moves.push({
-                      playerId: "cpu",
-                      attack: cpuAttack,
-                      opponentResponse: defend,
-                    });
-                    battle.player1.health -=
-                      cpuAttack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
+                    return await delay(1000).then(() => {
+                      const seq2 = {
+                        playerId: "cpu",
+                        attack: cpuAttack,
+                        opponentResponse: defend,
+                      };
+                      battle.moves.push(seq2);
+                      battle.player1.health -=
+                        cpuAttack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
 
-                    if (battle.player1.health <= 0) {
-                      battle.winner = `CPU def. ${battle.player1.name}`;
-                    }
+                      battle.player1NeedInput = true;
+                      if (battle.player1.health <= 0) {
+                        battle.player1NeedInput = false;
+                        battle.winner = `CPU def. ${battle.player1.name}`;
+                      }
+
+                      io.in(roomKey).emit("battleUpdate", {
+                        battle,
+                        sequence: seq2,
+                        reset: !battle.winner,
+                      });
+                    });
                   } else {
                     battle.winner = `${battle.player1.name} def. CPU`;
                     winningPlayer = battle.player1;
