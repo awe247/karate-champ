@@ -92,6 +92,7 @@ export class Fight extends Scene {
 
     const { roomKey } = data;
     document.addEventListener("visibilitychange", () => {
+      console.log(`visibilitychange: ${document.visibilityState}`);
       if (document.visibilityState === "visible") {
         this.socket?.emit("needUpdate", { roomKey });
         this.socket?.on("ready", this.handleReady);

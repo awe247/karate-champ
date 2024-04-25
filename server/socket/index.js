@@ -147,10 +147,22 @@ module.exports = (io) => {
                 io.in(roomKey).emit("timeUpdate", { time: battle.time });
               } else {
                 clearInterval(gameRooms[roomKey].timer);
+                gameRooms[roomKey].timer = undefined;
                 // todo: send time's up
               }
             }, 1000);
           }, 2000);
+        }
+
+        // if the battle is in play and we are receiving a ready... ask them to update
+        if (!!battle.ready && gameRooms[roomKey].timer) {
+          const rounds = getMatchupDescriptions(gameRooms[roomKey]);
+          socket.emit("gameUpdate", {
+            rounds,
+            currentRound,
+            currentBattle,
+            battle,
+          });
         }
       }
     });
