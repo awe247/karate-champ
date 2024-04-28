@@ -149,6 +149,55 @@ module.exports = (io) => {
       }
     });
 
+    // client has asked for the state of the input controls
+    socket.on("checkInputStatus", (args, callback) => {
+      const { roomKey } = args;
+      let showP1 = false;
+      let showP2 = false;
+      let showInputsP1 = false;
+      let showInputsP2 = false;
+
+      if (gameRooms[roomKey]?.started) {
+        const { currentRound, currentBattle } = gameRooms[roomKey];
+        const battle =
+          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
+
+        if (battle.ready && !battle.winner) {
+          const id1 = battle?.player1?.id;
+          const id2 = battle?.player2?.id;
+          if (!!id1?.length) {
+            showP1 = true;
+            if (battle.moves?.length > 1) {
+              showP1 =
+                (battle.moves[0].playerId !== id1 &&
+                  battle.moves[1].playerId !== id1) ||
+                (battle.moves[1].playerId === id1 &&
+                  battle.moves[1].attack === 0);
+            }
+            showInputsP1 = showP1 && id1 === socket.id;
+          }
+          if (!!id2?.length) {
+            showP2 = true;
+            if (battle.moves?.length > 1) {
+              showP2 =
+                (battle.moves[0].playerId !== id2 &&
+                  battle.moves[1].playerId !== id2) ||
+                (battle.moves[1].playerId === id2 &&
+                  battle.moves[1].attack === 0);
+            }
+            showInputsP2 = showP2 && id2 === socket.id;
+          }
+        }
+      }
+
+      callback({
+        showP1,
+        showP2,
+        showInputsP1,
+        showInputsP2,
+      });
+    });
+
     socket.on("sendNext", (args) => {
       const { roomKey, currentRound, currentBattle } = args;
       if (gameRooms[roomKey].started) {
@@ -270,7 +319,7 @@ module.exports = (io) => {
             let winningPlayer = undefined;
 
             if (battle.player1.id === socket.id) {
-              battle.player1NeedInput = false;
+              io.in(roomKey).emit("moveUpdate", { hidePlayer1: true });
 
               // if battling the cpu then resolve player1 moves first
               if (!battle.player2) {
@@ -298,7 +347,6 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
-                    reset: false, // don't reset the inputs (only first move, and might be over)
                   });
 
                   if (!battleIsOver) {
@@ -314,16 +362,12 @@ module.exports = (io) => {
 
                       battleIsOver = battle.player1.health <= 0;
                       if (battleIsOver) {
-                        battle.player1NeedInput = false;
                         battle.winner = `CPU def. ${battle.player1.name}`;
-                      } else {
-                        battle.player1NeedInput = true;
                       }
 
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
-                        reset: !battleIsOver, // reset unless the battle is done
                       });
                     });
                   }
@@ -347,8 +391,6 @@ module.exports = (io) => {
 
                   let battleIsOver = battle.player1.health <= 0;
                   if (battleIsOver) {
-                    battle.player1NeedInput = false;
-                    battle.player2NeedInput = false;
                     battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
                     winningPlayer = battle.player2;
                   }
@@ -356,7 +398,6 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
-                    reset: false, // don't reset the inputs (only first move, and might be over)
                   });
 
                   if (!battleIsOver) {
@@ -368,19 +409,13 @@ module.exports = (io) => {
 
                       battleIsOver = battle.player2.health <= 0;
                       if (battleIsOver) {
-                        battle.player1NeedInput = false;
-                        battle.player2NeedInput = false;
                         battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
                         winningPlayer = battle.player1;
-                      } else {
-                        battle.player1NeedInput = true;
-                        battle.player2NeedInput = true;
                       }
 
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
-                        reset: !battleIsOver, // reset unless the battle is done
                       });
                     });
                   }
@@ -388,6 +423,7 @@ module.exports = (io) => {
               } else {
                 // otherwise just store the moves
                 console.log(`P1 attack: ${attack} defend: ${defend}`);
+
                 battle.moves.push({
                   playerId: battle.player1.id,
                   attack,
@@ -399,13 +435,8 @@ module.exports = (io) => {
                   opponentResponse: defend,
                 });
               }
-
-              io.in(roomKey).emit("moveUpdate", {
-                player1NeedInput: battle.player1NeedInput,
-                player2NeedInput: battle.player2NeedInput,
-              });
             } else if (battle.player2?.id === socket.id) {
-              battle.player2NeedInput = false;
+              io.in(roomKey).emit("moveUpdate", { hidePlayer2: true });
 
               // if player has moved then resolve their moves first
               if (battle.moves?.length > 1) {
@@ -427,8 +458,6 @@ module.exports = (io) => {
 
                   let battleIsOver = battle.player2.health <= 0;
                   if (battleIsOver) {
-                    battle.player1NeedInput = false;
-                    battle.player2NeedInput = false;
                     battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
                     winningPlayer = battle.player1;
                   }
@@ -436,7 +465,6 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
-                    reset: false, // don't reset the inputs (only first move, and might be over)
                   });
 
                   if (!battleIsOver) {
@@ -448,25 +476,20 @@ module.exports = (io) => {
 
                       battleIsOver = battle.player1.health <= 0;
                       if (battleIsOver) {
-                        battle.player1NeedInput = false;
-                        battle.player2NeedInput = false;
                         battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
                         winningPlayer = battle.player2;
-                      } else {
-                        battle.player1NeedInput = true;
-                        battle.player2NeedInput = true;
                       }
 
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
-                        reset: !battleIsOver, // reset unless the battle is done
                       });
                     });
                   }
                 });
               } else {
                 console.log(`P2 attack: ${attack} defend: ${defend}`);
+
                 // otherwise just store until they do
                 battle.moves.push({
                   playerId: battle.player2.id,
@@ -479,11 +502,6 @@ module.exports = (io) => {
                   opponentResponse: defend,
                 });
               }
-
-              io.in(roomKey).emit("moveUpdate", {
-                player1NeedInput: battle.player1NeedInput,
-                player2NeedInput: battle.player2NeedInput,
-              });
             }
 
             if (battle.winner) {
@@ -688,12 +706,10 @@ function createRounds(players) {
       player1: { ...player1, id: pair[0], health: 100 },
       moves: [],
       time: 60,
-      player1NeedInput: true,
     };
     if (pair.length > 1 && pair[1] !== undefined) {
       const player2 = players[pair[1]];
       battle.player2 = { ...player2, id: pair[1], health: 100 };
-      battle.player2NeedInput = true;
     } else {
       battle.cpuHealth = 100;
     }
@@ -728,7 +744,6 @@ function moveWinnerToNextRound(roomKey, winner) {
       }
       if (!battle.player2 && !placed) {
         battle.player2 = { ...winner, health: 100 };
-        battle.player2NeedInput = true;
         placed = true;
       }
     });
@@ -738,7 +753,6 @@ function moveWinnerToNextRound(roomKey, winner) {
         player1: { ...winner, health: 100 },
         moves: [],
         time: 60,
-        player1NeedInput: true,
       });
       placed = true;
     }

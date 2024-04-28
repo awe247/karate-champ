@@ -60,6 +60,4 @@ export interface Battle {
   cpuHealth: number;
   winner: string;
   ready: boolean;
-  player1NeedInput: boolean;
-  player2NeedInput?: boolean;
 }

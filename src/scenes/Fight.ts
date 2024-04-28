@@ -652,45 +652,43 @@ export class Fight extends Scene {
   }
 
   handleReady = () => {
-    const scene = this;
-    scene.winnerText?.setText("");
-    scene.readyTween?.restart();
-    scene.p1HealthBar?.setVisible(true);
-    scene.p2HealthBar?.setVisible(true);
-    scene.player1Text?.setText(this.battle?.player1?.name ?? "Player 1");
-    scene.player2Text?.setText(this.battle?.player2?.name ?? "CPU");
-    scene.player1Sprite?.setVisible(true);
-    scene.player2Sprite?.setVisible(true);
-    scene.timerText?.setText(`${this.timerCount}`).setVisible(true);
+    this.winnerText?.setText("");
+    this.readyTween?.restart();
+    this.p1HealthBar?.setVisible(true);
+    this.p2HealthBar?.setVisible(true);
+    this.player1Text?.setText(this.battle?.player1?.name ?? "Player 1");
+    this.player2Text?.setText(this.battle?.player2?.name ?? "CPU");
+    this.player1Sprite?.setVisible(true);
+    this.player2Sprite?.setVisible(true);
+    this.timerText?.setText(`${this.timerCount}`).setVisible(true);
 
-    setTimeout(() => scene.showPlayerInput(scene), 3000);
+    setTimeout(this.showPlayerInput, 3000);
   };
 
   handleNext = (args: GameUpdate) => {
-    const scene = this;
     const { battle, rounds, currentRound, currentBattle } = args;
 
-    scene.rounds = rounds;
-    scene.currentRound = currentRound;
-    scene.currentBattle = currentBattle;
-    scene.battle = battle;
-    scene.timerCount = battle.time;
+    this.rounds = rounds;
+    this.currentRound = currentRound;
+    this.currentBattle = currentBattle;
+    this.battle = battle;
+    this.timerCount = battle.time;
 
     //scene.cameras.main.fadeOut(500, 0, 0, 0);
 
-    scene.winnerText?.setText("");
-    scene.readyTween?.restart();
-    scene.p1HealthBar?.setVisible(true);
-    scene.p2HealthBar?.setVisible(true);
-    scene.player1Text?.setText(battle?.player1?.name ?? "Player 1");
-    scene.player2Text?.setText(battle?.player2?.name ?? "CPU");
-    scene.player1Sprite?.setVisible(true);
-    scene.player2Sprite?.setVisible(true);
+    this.winnerText?.setText("");
+    this.readyTween?.restart();
+    this.p1HealthBar?.setVisible(true);
+    this.p2HealthBar?.setVisible(true);
+    this.player1Text?.setText(battle?.player1?.name ?? "Player 1");
+    this.player2Text?.setText(battle?.player2?.name ?? "CPU");
+    this.player1Sprite?.setVisible(true);
+    this.player2Sprite?.setVisible(true);
     if (battle?.player1) {
-      createPlayerTexture(scene, battle?.player1);
-      scene.player1Sprite?.setTexture(battle.player1.id);
-      if (!scene.anims.exists(`${battle?.player1.id}-idle`)) {
-        scene.anims.create({
+      createPlayerTexture(this, battle?.player1);
+      this.player1Sprite?.setTexture(battle.player1.id);
+      if (!this.anims.exists(`${battle?.player1.id}-idle`)) {
+        this.anims.create({
           key: `${battle?.player1.id}-idle`,
           frames: this.anims.generateFrameNumbers(battle.player1.id, {
             start: 0,
@@ -701,10 +699,10 @@ export class Fight extends Scene {
         });
       }
     }
-    createPlayerTexture(scene, battle?.player2);
-    scene.player1Sprite?.setTexture(battle.player2?.id ?? "cpu");
-    if (!scene.anims.exists(`${battle?.player2?.id ?? "cpu"}-idle`)) {
-      scene.anims.create({
+    createPlayerTexture(this, battle?.player2);
+    this.player2Sprite?.setTexture(battle.player2?.id ?? "cpu");
+    if (!this.anims.exists(`${battle?.player2?.id ?? "cpu"}-idle`)) {
+      this.anims.create({
         key: `${battle?.player2?.id ?? "cpu"}-idle`,
         frames: this.anims.generateFrameNumbers(battle.player2?.id ?? "cpu", {
           start: 0,
@@ -714,31 +712,31 @@ export class Fight extends Scene {
         repeat: -1,
       });
     }
-    scene.timerText?.setText(`${this.timerCount}`).setVisible(true);
+    this.timerText?.setText(`${this.timerCount}`).setVisible(true);
 
-    scene.player1Moving = false;
-    scene.player2Moving = false;
+    this.player1Moving = false;
+    this.player2Moving = false;
     const healthP1 = battle.player1.health;
     const healthP2 = battle.player2?.health ?? battle.cpuHealth ?? 0;
-    scene.player1KO = healthP1 <= 0;
-    scene.player2KO = healthP2 <= 0;
+    this.player1KO = healthP1 <= 0;
+    this.player2KO = healthP2 <= 0;
 
-    scene.waiting = false;
-    scene.movesSent = false;
-    scene.attackPicked = BattleAttack.None;
+    this.waiting = false;
+    this.movesSent = false;
+    this.attackPicked = BattleAttack.None;
 
-    if (scene.player1KO || scene.player2KO) {
-      if (scene.player1KO) {
-        scene.player1Sprite?.anims.stop();
-        scene.player1Sprite?.setFrame(PlayerFrame.KO);
+    if (this.player1KO || this.player2KO) {
+      if (this.player1KO) {
+        this.player1Sprite?.anims.stop();
+        this.player1Sprite?.setFrame(PlayerFrame.KO);
       }
-      if (scene.player2KO) {
-        scene.player2Sprite?.anims.stop();
-        scene.player2Sprite?.setFrame(PlayerFrame.KO);
+      if (this.player2KO) {
+        this.player2Sprite?.anims.stop();
+        this.player2Sprite?.setFrame(PlayerFrame.KO);
       }
     }
 
-    setTimeout(() => scene.showPlayerInput(scene), 3000);
+    setTimeout(this.showPlayerInput, 3000);
   };
 
   handleTimeUpdate = (args: { time: number }) => {
@@ -750,106 +748,93 @@ export class Fight extends Scene {
   };
 
   handleInput = (attack: BattleAttack, defend: BattleDefend) => {
-    const scene = this;
-    if (scene.attackPicked !== BattleAttack.None) {
-      scene.movesSent = true;
-      const { roomKey } = scene;
-      scene.socket?.emit("sendMoves", {
+    if (this.attackPicked !== BattleAttack.None) {
+      this.movesSent = true;
+      const { roomKey } = this;
+      this.socket?.emit("sendMoves", {
         roomKey,
-        attack: scene.attackPicked,
+        attack: this.attackPicked,
         defend,
       });
-      if (scene.battle?.player1?.id === scene.socket?.id) {
-        scene.p1ThoughtBubble?.setVisible(false);
+      if (this.battle?.player1?.id === this.socket?.id) {
+        this.p1ThoughtBubble?.setVisible(false);
       }
-      if (scene.battle?.player2?.id === scene.socket?.id) {
-        scene.p2ThoughtBubble?.setVisible(false);
+      if (this.battle?.player2?.id === this.socket?.id) {
+        this.p2ThoughtBubble?.setVisible(false);
       }
     } else {
-      scene.attackPicked = attack;
-      if (scene.battle?.player1?.id === scene.socket?.id) {
-        scene.p1ThoughtAttack?.setVisible(false);
-        scene.p1ThoughtDefend?.setVisible(true);
+      this.attackPicked = attack;
+      if (this.battle?.player1?.id === this.socket?.id) {
+        this.p1ThoughtAttack?.setVisible(false);
+        this.p1ThoughtDefend?.setVisible(true);
       }
-      if (scene.battle?.player2?.id === scene.socket?.id) {
-        scene.p2ThoughtAttack?.setVisible(false);
-        scene.p2ThoughtDefend?.setVisible(true);
+      if (this.battle?.player2?.id === this.socket?.id) {
+        this.p2ThoughtAttack?.setVisible(false);
+        this.p2ThoughtDefend?.setVisible(true);
       }
     }
   };
 
-  handleMove = (args: {
-    player1NeedInput: boolean;
-    player2NeedInput?: boolean;
-  }) => {
-    const scene = this;
-    if (scene.battle) {
-      scene.battle.player1NeedInput = args.player1NeedInput;
-      scene.battle.player2NeedInput = args.player2NeedInput;
-      scene.showPlayerInput(scene);
+  handleMove = (args: { hidePlayer1?: boolean; hidePlayer2?: boolean }) => {
+    const { hidePlayer1, hidePlayer2 } = args;
+    if (hidePlayer1 === true) {
+      this.p1ThoughtBubble?.setVisible(false);
+    }
+    if (hidePlayer2 === true) {
+      this.p2ThoughtBubble?.setVisible(false);
     }
   };
 
-  handleBattle = (args: {
-    sequence: BattleSequence;
-    battle: Battle;
-    reset: boolean;
-  }) => {
-    const { battle, sequence, reset } = args;
-    const scene = this;
+  handleBattle = (args: { sequence: BattleSequence; battle: Battle }) => {
+    const { battle, sequence } = args;
 
-    if (!scene.player2KO && !scene.player1KO && sequence) {
+    if (!this.player2KO && !this.player1KO && sequence) {
       const healthP1 = battle.player1.health;
       const healthP2 = battle.player2?.health ?? battle.cpuHealth ?? 0;
-      scene.animateSequence(sequence, healthP1, healthP2);
-      if (reset) {
-        scene.movesSent = false;
-        scene.attackPicked = BattleAttack.None;
-        if (scene.battle) {
-          scene.battle.player1NeedInput = battle.player1NeedInput;
-          scene.battle.player2NeedInput = battle.player2NeedInput;
-        }
-        scene.showPlayerInput(scene);
+      this.animateSequence(sequence, healthP1, healthP2);
+      if (this.movesSent) {
+        this.movesSent = false;
+        this.attackPicked = BattleAttack.None;
+        setTimeout(this.showPlayerInput, 1000);
       }
     }
 
-    scene.battle = battle;
+    this.battle = battle;
   };
 
   handleGameUpdate = async (args: GameUpdate) => {
     // no animation or anything in here. this is just a state update if the browser was inactive and
     // missed other messages
     const { battle, rounds, currentRound, currentBattle } = args;
-    const scene = this;
 
-    if (battle.ready && !scene.ready) {
-      if (scene.waiting) {
-        scene.readyButton?.setVisible(false);
-        scene.winnerText?.setText("Waiting...");
-        scene.fxFightSong?.pause();
-        scene.p1HealthBar?.setVisible(false);
-        scene.p2HealthBar?.setVisible(false);
-        scene.player1Text?.setText("");
-        scene.player2Text?.setText("");
-        scene.player1Sprite?.setVisible(false);
-        scene.player2Sprite?.setVisible(false);
-        scene.timerText?.setVisible(false);
+    if (battle.ready && !this.ready) {
+      if (this.waiting) {
+        this.readyButton?.setVisible(false);
+        this.winnerText?.setText("Waiting...");
+        this.fxFightSong?.pause();
+        this.p1HealthBar?.setVisible(false);
+        this.p2HealthBar?.setVisible(false);
+        this.player1Text?.setText("");
+        this.player2Text?.setText("");
+        this.player1Sprite?.setVisible(false);
+        this.player2Sprite?.setVisible(false);
+        this.timerText?.setVisible(false);
       } else {
         // missed the ready state
-        scene.ready = true;
-        scene.winnerText?.setText("");
-        scene.fxFightSong?.play();
-        scene.p1HealthBar?.setVisible(true);
-        scene.p2HealthBar?.setVisible(true);
-        scene.player1Text?.setText(battle.player1.name ?? "Player 1");
-        scene.player2Text?.setText(battle.player2?.name ?? "CPU");
-        scene.player1Sprite?.setVisible(true);
-        scene.player2Sprite?.setVisible(true);
+        this.ready = true;
+        this.winnerText?.setText("");
+        this.fxFightSong?.play();
+        this.p1HealthBar?.setVisible(true);
+        this.p2HealthBar?.setVisible(true);
+        this.player1Text?.setText(battle.player1.name ?? "Player 1");
+        this.player2Text?.setText(battle.player2?.name ?? "CPU");
+        this.player1Sprite?.setVisible(true);
+        this.player2Sprite?.setVisible(true);
         if (battle?.player1) {
-          createPlayerTexture(scene, battle?.player1);
-          scene.player1Sprite?.setTexture(battle.player1.id);
-          if (!scene.anims.exists(`${battle?.player1.id}-idle`)) {
-            scene.anims.create({
+          createPlayerTexture(this, battle?.player1);
+          this.player1Sprite?.setTexture(battle.player1.id);
+          if (!this.anims.exists(`${battle?.player1.id}-idle`)) {
+            this.anims.create({
               key: `${battle?.player1.id}-idle`,
               frames: this.anims.generateFrameNumbers(battle.player1.id, {
                 start: 0,
@@ -860,10 +845,10 @@ export class Fight extends Scene {
             });
           }
         }
-        createPlayerTexture(scene, battle?.player2);
-        scene.player1Sprite?.setTexture(battle.player2?.id ?? "cpu");
-        if (!scene.anims.exists(`${battle?.player2?.id ?? "cpu"}-idle`)) {
-          scene.anims.create({
+        createPlayerTexture(this, battle?.player2);
+        this.player1Sprite?.setTexture(battle.player2?.id ?? "cpu");
+        if (!this.anims.exists(`${battle?.player2?.id ?? "cpu"}-idle`)) {
+          this.anims.create({
             key: `${battle?.player2?.id ?? "cpu"}-idle`,
             frames: this.anims.generateFrameNumbers(
               battle.player2?.id ?? "cpu",
@@ -876,121 +861,115 @@ export class Fight extends Scene {
             repeat: -1,
           });
         }
-        scene.timerText?.setText(`${battle.time}`).setVisible(true);
+        this.timerText?.setText(`${battle.time}`).setVisible(true);
       }
     }
 
-    // if there's a difference in health, missed receiving a battle updated
-    const sent = scene.movesSent;
-    scene.movesSent = await this.haveMovesBeenSent();
-    if (!scene.movesSent && sent) {
-      scene.attackPicked = BattleAttack.None;
+    // if there's a difference in moves sent value, missed receiving a battle updated
+    const movesSent = this.movesSent;
+    this.movesSent = await this.haveMovesBeenSent();
+    if (!this.movesSent && movesSent) {
+      this.attackPicked = BattleAttack.None;
     }
 
-    scene.player1Moving = false;
-    scene.player2Moving = false;
+    this.player1Moving = false;
+    this.player2Moving = false;
     const healthP1 = battle.player1.health;
     const healthP2 = battle.player2?.health ?? battle.cpuHealth ?? 0;
-    scene.player1KO = healthP1 <= 0;
-    scene.player2KO = healthP2 <= 0;
+    this.player1KO = healthP1 <= 0;
+    this.player2KO = healthP2 <= 0;
 
     if (
-      scene.battle?.player1.id !== battle.player1.id ||
-      scene.battle?.player2?.id !== battle.player2?.id
+      this.battle?.player1.id !== battle.player1.id ||
+      this.battle?.player2?.id !== battle.player2?.id
     ) {
-      scene.waiting = false;
+      this.waiting = false;
     }
 
-    scene.rounds = rounds;
-    scene.currentRound = currentRound;
-    scene.currentBattle = currentBattle;
-    scene.battle = battle;
-    scene.timerCount = battle.time;
+    this.rounds = rounds;
+    this.currentRound = currentRound;
+    this.currentBattle = currentBattle;
+    this.battle = battle;
+    this.timerCount = battle.time;
 
-    if (scene.player1KO || scene.player2KO) {
-      if (scene.player1KO) {
-        scene.player1Sprite?.anims.stop();
-        scene.player1Sprite?.setFrame(PlayerFrame.KO);
+    if (this.player1KO || this.player2KO) {
+      if (this.player1KO) {
+        this.player1Sprite?.anims.stop();
+        this.player1Sprite?.setFrame(PlayerFrame.KO);
       }
-      if (scene.player2KO) {
-        scene.player2Sprite?.anims.stop();
-        scene.player2Sprite?.setFrame(PlayerFrame.KO);
+      if (this.player2KO) {
+        this.player2Sprite?.anims.stop();
+        this.player2Sprite?.setFrame(PlayerFrame.KO);
       }
-      if (!scene.waiting) {
-        scene.readyButton?.setVisible(true);
-        const winner = scene.player1KO
-          ? scene.battle?.player2?.name ?? "CPU"
-          : scene.battle?.player1.name;
-        scene.winnerText?.setText(`${winner} wins!`);
+      if (!this.waiting) {
+        this.readyButton?.setVisible(true);
+        const winner = this.player1KO
+          ? this.battle?.player2?.name ?? "CPU"
+          : this.battle?.player1.name;
+        this.winnerText?.setText(`${winner} wins!`);
       }
     }
-    scene.showPlayerInput(scene);
+    this.showPlayerInput();
   };
 
-  showPlayerInput = (scene: Fight) => {
-    const showBubble1 =
-      scene.battle?.player1NeedInput && scene.ready && !scene.waiting;
-    const showBubble2 =
-      scene.battle?.player2NeedInput && scene.ready && !scene.waiting;
-    const showInputs1 =
-      scene.battle?.player1?.id === scene.socket?.id && !scene.movesSent;
-    const showInputs2 =
-      scene.battle?.player2?.id === scene.socket?.id && !scene.movesSent;
+  showPlayerInput = async () => {
+    const { showP1, showP2, showInputsP1, showInputsP2 } =
+      await this.getInputStatus();
 
-    if (showBubble1) {
-      scene.p1ThoughtBubble?.setVisible(true);
-      if (showInputs1) {
-        scene.p1ThoughtEllipsis?.setVisible(false);
-        scene.p1ThoughtText?.setVisible(true);
-        if (scene.attackPicked !== BattleAttack.None) {
-          scene.p1ThoughtAttack?.setVisible(false);
-          scene.p1ThoughtDefend?.setVisible(true);
+    if (showP1) {
+      this.p1ThoughtBubble?.setVisible(true);
+      if (showInputsP1) {
+        this.p1ThoughtEllipsis?.setVisible(false);
+        this.p1ThoughtText?.setVisible(true);
+        if (this.attackPicked !== BattleAttack.None) {
+          this.p1ThoughtAttack?.setVisible(false);
+          this.p1ThoughtDefend?.setVisible(true);
         } else {
-          scene.p1ThoughtDefend?.setVisible(false);
-          scene.p1ThoughtAttack?.setVisible(true);
+          this.p1ThoughtDefend?.setVisible(false);
+          this.p1ThoughtAttack?.setVisible(true);
         }
-        scene.p1MoveHigh?.setVisible(true);
-        scene.p1MoveMid?.setVisible(true);
-        scene.p1MoveLow?.setVisible(true);
+        this.p1MoveHigh?.setVisible(true);
+        this.p1MoveMid?.setVisible(true);
+        this.p1MoveLow?.setVisible(true);
       } else {
-        scene.p1ThoughtEllipsis?.setVisible(true);
-        scene.p1ThoughtText?.setVisible(false);
-        scene.p1ThoughtAttack?.setVisible(false);
-        scene.p1ThoughtDefend?.setVisible(false);
-        scene.p1MoveHigh?.setVisible(false);
-        scene.p1MoveMid?.setVisible(false);
-        scene.p1MoveLow?.setVisible(false);
+        this.p1ThoughtEllipsis?.setVisible(true);
+        this.p1ThoughtText?.setVisible(false);
+        this.p1ThoughtAttack?.setVisible(false);
+        this.p1ThoughtDefend?.setVisible(false);
+        this.p1MoveHigh?.setVisible(false);
+        this.p1MoveMid?.setVisible(false);
+        this.p1MoveLow?.setVisible(false);
       }
     } else {
-      scene.p1ThoughtBubble?.setVisible(false);
+      this.p1ThoughtBubble?.setVisible(false);
     }
 
-    if (showBubble2) {
-      scene.p2ThoughtBubble?.setVisible(true);
-      if (showInputs2) {
-        scene.p2ThoughtEllipsis?.setVisible(false);
-        scene.p2ThoughtText?.setVisible(true);
-        if (scene.attackPicked !== BattleAttack.None) {
-          scene.p2ThoughtAttack?.setVisible(false);
-          scene.p2ThoughtDefend?.setVisible(true);
+    if (showP2) {
+      this.p2ThoughtBubble?.setVisible(true);
+      if (showInputsP2) {
+        this.p2ThoughtEllipsis?.setVisible(false);
+        this.p2ThoughtText?.setVisible(true);
+        if (this.attackPicked !== BattleAttack.None) {
+          this.p2ThoughtAttack?.setVisible(false);
+          this.p2ThoughtDefend?.setVisible(true);
         } else {
-          scene.p2ThoughtDefend?.setVisible(false);
-          scene.p2ThoughtAttack?.setVisible(true);
+          this.p2ThoughtDefend?.setVisible(false);
+          this.p2ThoughtAttack?.setVisible(true);
         }
-        scene.p2MoveHigh?.setVisible(true);
-        scene.p2MoveMid?.setVisible(true);
-        scene.p2MoveLow?.setVisible(true);
+        this.p2MoveHigh?.setVisible(true);
+        this.p2MoveMid?.setVisible(true);
+        this.p2MoveLow?.setVisible(true);
       } else {
-        scene.p2ThoughtEllipsis?.setVisible(true);
-        scene.p2ThoughtText?.setVisible(false);
-        scene.p2ThoughtAttack?.setVisible(false);
-        scene.p2ThoughtDefend?.setVisible(false);
-        scene.p2MoveHigh?.setVisible(false);
-        scene.p2MoveMid?.setVisible(false);
-        scene.p2MoveLow?.setVisible(false);
+        this.p2ThoughtEllipsis?.setVisible(true);
+        this.p2ThoughtText?.setVisible(false);
+        this.p2ThoughtAttack?.setVisible(false);
+        this.p2ThoughtDefend?.setVisible(false);
+        this.p2MoveHigh?.setVisible(false);
+        this.p2MoveMid?.setVisible(false);
+        this.p2MoveLow?.setVisible(false);
       }
     } else {
-      scene.p2ThoughtBubble?.setVisible(false);
+      this.p2ThoughtBubble?.setVisible(false);
     }
   };
 
@@ -999,8 +978,7 @@ export class Fight extends Scene {
     healthP1: number,
     healthP2: number
   ) => {
-    const scene = this;
-    const player1Attacking = sequence.playerId === scene.battle?.player1.id;
+    const player1Attacking = sequence.playerId === this.battle?.player1.id;
     const isBlock =
       (sequence.opponentResponse === BattleDefend.High &&
         sequence.attack === BattleAttack.High) ||
@@ -1014,49 +992,51 @@ export class Fight extends Scene {
         : "punch-blocked"
       : "punch-hit";
 
-    if (!scene.player2Moving) {
-      scene.player2Moving = true;
-      scene.player2Sprite?.anims.stop();
+    if (!this.player2Moving) {
+      this.player2Moving = true;
+      this.player2Sprite?.anims.stop();
       if (player1Attacking) {
-        scene.setPlayer2Health(healthP2);
+        this.setPlayer2Health(healthP2);
         if (healthP2 > 0) {
           if (isBlock) {
             switch (sequence.opponentResponse) {
               case BattleDefend.High:
-                scene.player2Sprite?.setFrame(PlayerFrame.HighBlock);
+                this.player2Sprite?.setFrame(PlayerFrame.HighBlock);
                 break;
               case BattleDefend.Mid:
-                scene.player2Sprite?.setFrame(PlayerFrame.MidBlock);
+                this.player2Sprite?.setFrame(PlayerFrame.MidBlock);
                 break;
               case BattleDefend.Low:
-                scene.player2Sprite?.setFrame(PlayerFrame.LowMiss);
+                this.player2Sprite?.setFrame(PlayerFrame.LowMiss);
                 break;
             }
           } else {
             switch (sequence.attack) {
               case BattleAttack.High:
-                scene.player2Sprite?.setFrame(PlayerFrame.HighHit);
+                this.player2Sprite?.setFrame(PlayerFrame.HighHit);
                 break;
               case BattleAttack.Mid:
-                scene.player2Sprite?.setFrame(PlayerFrame.MidHit);
+                this.player2Sprite?.setFrame(PlayerFrame.MidHit);
                 break;
               case BattleAttack.Low:
-                scene.player2Sprite?.setFrame(PlayerFrame.MidHit);
+                this.player2Sprite?.setFrame(PlayerFrame.MidHit);
                 break;
             }
           }
         } else {
-          scene.player2KO = true;
-          scene.player2Sprite?.setFrame(PlayerFrame.KO);
+          this.player2KO = true;
+          this.player2Sprite?.setFrame(PlayerFrame.KO);
         }
         if (isBlock) {
+          const scene = this;
           setTimeout(() => {
             scene.player2Moving = false;
           }, 400);
         } else {
-          const { x, y } = scene.player2Sprite ?? { x: 0 };
-          const move2Tween = scene.tweens.add({
-            targets: scene.player2Sprite,
+          const scene = this;
+          const { x, y } = this.player2Sprite ?? { x: 0 };
+          const move2Tween = this.tweens.add({
+            targets: this.player2Sprite,
             x: x + 100,
             y: y,
             duration: 300,
@@ -1072,66 +1052,69 @@ export class Fight extends Scene {
       } else {
         switch (sequence.attack) {
           case BattleAttack.High:
-            scene.player2Sprite?.setFrame(PlayerFrame.HighKick);
+            this.player2Sprite?.setFrame(PlayerFrame.HighKick);
             break;
           case BattleAttack.Mid:
-            scene.player2Sprite?.setFrame(PlayerFrame.MidKick);
+            this.player2Sprite?.setFrame(PlayerFrame.MidKick);
             break;
           case BattleAttack.Low:
-            scene.player2Sprite?.setFrame(PlayerFrame.LowPunch);
+            this.player2Sprite?.setFrame(PlayerFrame.LowPunch);
             break;
         }
+        const scene = this;
         setTimeout(() => {
           scene.player2Moving = false;
         }, 400);
       }
     }
 
-    scene.sound.play(fxid, { loop: false, volume: 0.3 });
+    this.sound.play(fxid, { loop: false, volume: 0.3 });
 
-    if (!scene.player1Moving) {
-      scene.player1Moving = true;
-      scene.player1Sprite?.anims.stop();
+    if (!this.player1Moving) {
+      this.player1Moving = true;
+      this.player1Sprite?.anims.stop();
       if (!player1Attacking) {
-        scene.setPlayer1Health(healthP1);
+        this.setPlayer1Health(healthP1);
         if (healthP1 > 0) {
           if (isBlock) {
             switch (sequence.opponentResponse) {
               case BattleDefend.High:
-                scene.player1Sprite?.setFrame(PlayerFrame.HighBlock);
+                this.player1Sprite?.setFrame(PlayerFrame.HighBlock);
                 break;
               case BattleDefend.Mid:
-                scene.player1Sprite?.setFrame(PlayerFrame.MidBlock);
+                this.player1Sprite?.setFrame(PlayerFrame.MidBlock);
                 break;
               case BattleDefend.Low:
-                scene.player1Sprite?.setFrame(PlayerFrame.LowMiss);
+                this.player1Sprite?.setFrame(PlayerFrame.LowMiss);
                 break;
             }
           } else {
             switch (sequence.attack) {
               case BattleAttack.High:
-                scene.player1Sprite?.setFrame(PlayerFrame.HighHit);
+                this.player1Sprite?.setFrame(PlayerFrame.HighHit);
                 break;
               case BattleAttack.Mid:
-                scene.player1Sprite?.setFrame(PlayerFrame.MidHit);
+                this.player1Sprite?.setFrame(PlayerFrame.MidHit);
                 break;
               case BattleAttack.Low:
-                scene.player1Sprite?.setFrame(PlayerFrame.MidHit);
+                this.player1Sprite?.setFrame(PlayerFrame.MidHit);
                 break;
             }
           }
         } else {
-          scene.player1KO = true;
-          scene.player1Sprite?.setFrame(PlayerFrame.KO);
+          this.player1KO = true;
+          this.player1Sprite?.setFrame(PlayerFrame.KO);
         }
         if (isBlock) {
+          const scene = this;
           setTimeout(() => {
             scene.player1Moving = false;
           }, 400);
         } else {
-          const { x, y } = scene.player1Sprite ?? { x: 0 };
-          const move1Tween = scene.tweens.add({
-            targets: scene.player1Sprite,
+          const scene = this;
+          const { x, y } = this.player1Sprite ?? { x: 0 };
+          const move1Tween = this.tweens.add({
+            targets: this.player1Sprite,
             x: x - 100,
             y: y,
             duration: 300,
@@ -1147,53 +1130,74 @@ export class Fight extends Scene {
       } else {
         switch (sequence.attack) {
           case BattleAttack.High:
-            scene.player1Sprite?.setFrame(PlayerFrame.HighKick);
+            this.player1Sprite?.setFrame(PlayerFrame.HighKick);
             break;
           case BattleAttack.Mid:
-            scene.player1Sprite?.setFrame(PlayerFrame.MidKick);
+            this.player1Sprite?.setFrame(PlayerFrame.MidKick);
             break;
           case BattleAttack.Low:
-            scene.player1Sprite?.setFrame(PlayerFrame.LowPunch);
+            this.player1Sprite?.setFrame(PlayerFrame.LowPunch);
             break;
         }
+        const scene = this;
         setTimeout(() => {
           scene.player1Moving = false;
         }, 400);
       }
     }
 
-    if (scene.player2KO || scene.player1KO) {
-      scene.sound.play("ko", { loop: false, volume: 0.3 });
+    if (this.player2KO || this.player1KO) {
+      this.sound.play("ko", { loop: false, volume: 0.3 });
 
-      const winner = scene.player1KO
-        ? scene.battle?.player2?.name ?? "CPU"
-        : scene.battle?.player1.name;
-      scene.winnerText?.setText(`${winner} wins!`);
-      scene.readyButton?.setVisible(true);
+      const winner = this.player1KO
+        ? this.battle?.player2?.name ?? "CPU"
+        : this.battle?.player1.name;
+      this.winnerText?.setText(`${winner} wins!`);
+      this.readyButton?.setVisible(true);
     }
   };
 
   setPlayer1Health = (health: number) => {
-    const scene = this;
-    if (scene.battle?.player1) {
-      scene.battle.player1.health = health;
+    if (this.battle?.player1) {
+      this.battle.player1.health = health;
     }
   };
 
   setPlayer2Health = (health: number) => {
-    const scene = this;
-    if (scene.battle?.player2) {
-      scene.battle.player1.health = health;
+    if (this.battle?.player2) {
+      this.battle.player1.health = health;
     }
   };
 
   haveMovesBeenSent = (): Promise<boolean> => {
-    const scene = this;
-    const { socket, roomKey } = scene;
+    const { socket, roomKey } = this;
     return new Promise(function (resolve, reject) {
       socket?.emit("checkMovesSent", { roomKey }, (answer: boolean) => {
         resolve(answer);
       });
+    });
+  };
+
+  getInputStatus = (): Promise<{
+    showP1: boolean;
+    showP2: boolean;
+    showInputsP1: boolean;
+    showInputsP2: boolean;
+  }> => {
+    const { socket, roomKey } = this;
+    return new Promise(function (resolve, reject) {
+      socket?.emit(
+        "checkInputStatus",
+        { roomKey },
+        (result: {
+          showP1: boolean;
+          showP2: boolean;
+          showInputsP1: boolean;
+          showInputsP2: boolean;
+        }) => {
+          resolve(result);
+        }
+      );
     });
   };
 }

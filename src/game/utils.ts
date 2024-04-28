@@ -30,12 +30,12 @@ export function getMatchupBgColorAsText(
   return "#ffffff";
 }
 
-function hexToColor(hex: string): number[] {
+function hexToColor(hex: string): number[] | undefined {
   // Remove '#' if present
   hex = hex?.replace("#", "");
 
   if (!hex?.length) {
-    return [0, 0, 0];
+    return undefined;
   }
 
   // Parse the hexadecimal color components
@@ -52,17 +52,16 @@ export function createPlayerTexture(
   player?: PlayerBattle
 ): boolean {
   // CPU colors;
-  let { hairColor, eyeColor, skinColor, giColor } = player ?? {
-    hairColor: "#464d56",
-    eyeColor: "#ff0000",
-    skinColor: "#81c2e4",
-    giColor: "#1b4478",
-  };
+  let { hairColor, eyeColor, skinColor, giColor } = player ?? {};
 
-  const h = hexToColor(hairColor);
-  const e = hexToColor(eyeColor);
-  const s = hexToColor(skinColor);
-  const g = hexToColor(giColor);
+  const h = hairColor?.length ? hexToColor(hairColor) : hexToColor("#464d56");
+  const e = eyeColor?.length ? hexToColor(eyeColor) : hexToColor("#ff0000");
+  const s = skinColor?.length ? hexToColor(skinColor) : hexToColor("#81c2e4");
+  const g = giColor?.length ? hexToColor(giColor) : hexToColor("#1b4478");
+
+  if (!h || !e || !s || !g) {
+    return false;
+  }
 
   // Create a canvas and get its 2D context
   let canvas = document.createElement("canvas");
