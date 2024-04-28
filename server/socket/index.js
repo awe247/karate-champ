@@ -347,6 +347,7 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
+                    hidePlayer1: battleIsOver,
                   });
 
                   if (!battleIsOver) {
@@ -368,6 +369,7 @@ module.exports = (io) => {
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
+                        hidePlayer1: battleIsOver,
                       });
                     });
                   }
@@ -398,6 +400,8 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
+                    hidePlayer1: battleIsOver,
+                    hidePlayer2: battleIsOver,
                   });
 
                   if (!battleIsOver) {
@@ -416,6 +420,8 @@ module.exports = (io) => {
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
+                        hidePlayer1: battleIsOver,
+                        hidePlayer2: battleIsOver,
                       });
                     });
                   }
@@ -465,6 +471,8 @@ module.exports = (io) => {
                   io.in(roomKey).emit("battleUpdate", {
                     battle,
                     sequence: seq1,
+                    hidePlayer1: battleIsOver,
+                    hidePlayer2: battleIsOver,
                   });
 
                   if (!battleIsOver) {
@@ -483,6 +491,8 @@ module.exports = (io) => {
                       io.in(roomKey).emit("battleUpdate", {
                         battle,
                         sequence: seq2,
+                        hidePlayer1: battleIsOver,
+                        hidePlayer2: battleIsOver,
                       });
                     });
                   }

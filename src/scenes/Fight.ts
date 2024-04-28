@@ -299,7 +299,7 @@ export class Fight extends Scene {
     });
     this.fightTween.on("complete", () => {
       scene.fightTitle?.setVisible(false);
-      scene.fxFightSong?.play();
+      //scene.fxFightSong?.play();
       scene.ready = true;
     });
 
@@ -548,7 +548,7 @@ export class Fight extends Scene {
         scene.waiting = true;
         scene.readyButton?.setVisible(false);
         scene.winnerText?.setText("Waiting...");
-        scene.fxFightSong?.pause();
+        //scene.fxFightSong?.pause();
         scene.p1HealthBar?.setVisible(false);
         scene.p2HealthBar?.setVisible(false);
         scene.player1Text?.setText("");
@@ -777,16 +777,63 @@ export class Fight extends Scene {
 
   handleMove = (args: { hidePlayer1?: boolean; hidePlayer2?: boolean }) => {
     const { hidePlayer1, hidePlayer2 } = args;
-    if (hidePlayer1 === true) {
-      this.p1ThoughtBubble?.setVisible(false);
+    if (hidePlayer1 !== undefined) {
+      this.p1ThoughtBubble?.setVisible(!hidePlayer1);
+      if (this.battle?.player1?.id === this.socket?.id) {
+        this.p1ThoughtEllipsis?.setVisible(false);
+        this.p1ThoughtText?.setVisible(!hidePlayer1);
+        this.p1ThoughtAttack?.setVisible(
+          !hidePlayer1 && this.attackPicked === BattleAttack.None
+        );
+        this.p1ThoughtDefend?.setVisible(
+          !hidePlayer1 && this.attackPicked !== BattleAttack.None
+        );
+        this.p1MoveHigh?.setVisible(!hidePlayer1);
+        this.p1MoveMid?.setVisible(!hidePlayer1);
+        this.p1MoveLow?.setVisible(!hidePlayer1);
+      } else {
+        this.p1ThoughtEllipsis?.setVisible(!hidePlayer1);
+        this.p1ThoughtText?.setVisible(false);
+        this.p1ThoughtAttack?.setVisible(false);
+        this.p1ThoughtDefend?.setVisible(false);
+        this.p1MoveHigh?.setVisible(false);
+        this.p1MoveMid?.setVisible(false);
+        this.p1MoveLow?.setVisible(false);
+      }
     }
-    if (hidePlayer2 === true) {
-      this.p2ThoughtBubble?.setVisible(false);
+    if (hidePlayer2 !== undefined) {
+      this.p2ThoughtBubble?.setVisible(!hidePlayer2);
+      if (this.battle?.player2?.id === this.socket?.id) {
+        this.p2ThoughtEllipsis?.setVisible(false);
+        this.p2ThoughtText?.setVisible(!hidePlayer2);
+        this.p2ThoughtAttack?.setVisible(
+          !hidePlayer2 && this.attackPicked === BattleAttack.None
+        );
+        this.p2ThoughtDefend?.setVisible(
+          !hidePlayer2 && this.attackPicked !== BattleAttack.None
+        );
+        this.p2MoveHigh?.setVisible(!hidePlayer2);
+        this.p2MoveMid?.setVisible(!hidePlayer2);
+        this.p2MoveLow?.setVisible(!hidePlayer2);
+      } else {
+        this.p2ThoughtEllipsis?.setVisible(!hidePlayer2);
+        this.p2ThoughtText?.setVisible(false);
+        this.p2ThoughtAttack?.setVisible(false);
+        this.p2ThoughtDefend?.setVisible(false);
+        this.p2MoveHigh?.setVisible(false);
+        this.p2MoveMid?.setVisible(false);
+        this.p2MoveLow?.setVisible(false);
+      }
     }
   };
 
-  handleBattle = (args: { sequence: BattleSequence; battle: Battle }) => {
-    const { battle, sequence } = args;
+  handleBattle = (args: {
+    sequence: BattleSequence;
+    battle: Battle;
+    hidePlayer1?: boolean;
+    hidePlayer2?: boolean;
+  }) => {
+    const { battle, sequence, hidePlayer1, hidePlayer2 } = args;
 
     if (!this.player2KO && !this.player1KO && sequence) {
       const healthP1 = battle.player1.health;
@@ -795,7 +842,8 @@ export class Fight extends Scene {
       if (this.movesSent) {
         this.movesSent = false;
         this.attackPicked = BattleAttack.None;
-        setTimeout(this.showPlayerInput, 1000);
+        const scene = this;
+        setTimeout(() => scene.handleMove({ hidePlayer1, hidePlayer2 }), 1200);
       }
     }
 
@@ -811,7 +859,7 @@ export class Fight extends Scene {
       if (this.waiting) {
         this.readyButton?.setVisible(false);
         this.winnerText?.setText("Waiting...");
-        this.fxFightSong?.pause();
+        //this.fxFightSong?.pause();
         this.p1HealthBar?.setVisible(false);
         this.p2HealthBar?.setVisible(false);
         this.player1Text?.setText("");
@@ -823,7 +871,7 @@ export class Fight extends Scene {
         // missed the ready state
         this.ready = true;
         this.winnerText?.setText("");
-        this.fxFightSong?.play();
+        //this.fxFightSong?.play();
         this.p1HealthBar?.setVisible(true);
         this.p2HealthBar?.setVisible(true);
         this.player1Text?.setText(battle.player1.name ?? "Player 1");
