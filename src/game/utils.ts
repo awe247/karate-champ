@@ -32,7 +32,11 @@ export function getMatchupBgColorAsText(
 
 function hexToColor(hex: string): number[] {
   // Remove '#' if present
-  hex = hex.replace("#", "");
+  hex = hex?.replace("#", "");
+
+  if (!hex?.length) {
+    return [0, 0, 0];
+  }
 
   // Parse the hexadecimal color components
   let r = parseInt(hex.substring(0, 2), 16);
@@ -42,10 +46,11 @@ function hexToColor(hex: string): number[] {
   return [r, g, b];
 }
 
+// returns true if the texture was created
 export function createPlayerTexture(
   scene: Phaser.Scene,
   player?: PlayerBattle
-) {
+): boolean {
   // CPU colors;
   let { hairColor, eyeColor, skinColor, giColor } = player ?? {
     hairColor: "#464d56",
@@ -63,11 +68,11 @@ export function createPlayerTexture(
   let canvas = document.createElement("canvas");
   let ctx = canvas.getContext("2d");
   if (!ctx) {
-    return;
+    return false;
   }
 
   if (scene.textures.exists(`${player?.id ?? "cpu"}-texture`)) {
-    return;
+    return false;
   }
 
   let texture = scene.textures.get("player").getSourceImage();
@@ -134,4 +139,6 @@ export function createPlayerTexture(
       { frameWidth: 56, frameHeight: 56 }
     );
   }
+
+  return true;
 }
