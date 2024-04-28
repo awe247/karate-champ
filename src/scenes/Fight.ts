@@ -277,31 +277,31 @@ export class Fight extends Scene {
       targets: scene.readyTitle,
       scale: { value: 3.0, duration: 700, ease: "Back.easeInOut" },
       yoyo: true,
-      repeat: 0,
+      repeat: 10,
       paused: true,
     });
     this.fightTween = scene.tweens.add({
       targets: scene.fightTitle,
       scale: { value: 3.0, duration: 700, ease: "Back.easeInOut" },
       yoyo: true,
-      repeat: 0,
+      repeat: 10,
       paused: true,
     });
 
     this.readyTween.on("start", () => {
       scene.fxReadyFight?.play();
-      scene.readyTitle?.setVisible(true);
     });
     this.readyTween.on("restart", () => {
       scene.fxReadyFight?.play();
-      scene.readyTitle?.setVisible(true);
     });
-    this.readyTween.on("complete", () => {
+    this.readyTween.on("repeat", () => {
+      scene.readyTween?.pause();
       scene.readyTitle?.setVisible(false);
       scene.fightTitle?.setVisible(true);
-      scene.fightTween?.restart();
+      scene.fightTween?.play();
     });
-    this.fightTween.on("complete", () => {
+    this.fightTween.on("repeat", () => {
+      scene.fightTween?.pause();
       scene.fightTitle?.setVisible(false);
       //scene.fxFightSong?.play();
       scene.ready = true;
@@ -687,7 +687,10 @@ export class Fight extends Scene {
 
   handleReady = () => {
     this.winnerText?.setText("");
-    this.readyTween?.restart();
+    this.readyTitle?.setVisible(true);
+    this.readyTween?.seek(0);
+    this.fightTween?.seek(0);
+    this.readyTween?.play();
     this.p1HealthBar?.setVisible(true);
     this.p2HealthBar?.setVisible(true);
     this.player1Text?.setText(this.battle?.player1?.name ?? "Player 1");
@@ -713,7 +716,10 @@ export class Fight extends Scene {
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
         this.winnerText?.setText("");
-        this.readyTween?.restart();
+        this.readyTitle?.setVisible(true);
+        this.readyTween?.seek(0);
+        this.fightTween?.seek(0);
+        this.readyTween?.play();
         this.p1HealthBar?.setVisible(true);
         this.p2HealthBar?.setVisible(true);
         this.player1Text?.setText(battle?.player1?.name ?? "Player 1");
