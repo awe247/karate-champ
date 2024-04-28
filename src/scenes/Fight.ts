@@ -17,6 +17,7 @@ interface GameUpdate {
   currentBattle: number;
   battle: Battle;
   winner?: string;
+  waiting?: boolean;
 }
 
 export class Fight extends Scene {
@@ -900,7 +901,10 @@ export class Fight extends Scene {
   handleGameUpdate = async (args: GameUpdate) => {
     // no animation or anything in here. this is just a state update if the browser was inactive and
     // missed other messages
-    const { battle, rounds, currentRound, currentBattle } = args;
+    const { battle, rounds, currentRound, currentBattle, waiting } = args;
+    if (waiting !== undefined) {
+      this.waiting = waiting;
+    }
 
     if (battle.ready && !this.ready) {
       if (this.waiting) {

@@ -113,12 +113,14 @@ module.exports = (io) => {
         const rounds = getMatchupDescriptions(gameRooms[roomKey]);
         const battle =
           gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
+        const waiting = battle.waiting && battle.waiting.includes(socket.id);
 
         socket.emit("gameUpdate", {
           rounds,
           currentRound,
           currentBattle,
           battle,
+          waiting,
         });
       }
     });
@@ -346,11 +348,14 @@ module.exports = (io) => {
             const newBattle =
               gameRooms[roomKey].rounds[gameRooms[roomKey].currentRound]
                 .battles[gameRooms[roomKey].currentBattle];
+            const waiting =
+              newBattle.waiting && newBattle.waiting.includes(socket.id);
             socket.emit("gameUpdate", {
               rounds,
               currentRound: gameRooms[roomKey].currentRound,
               currentBattle: gameRooms[roomKey].currentBattle,
               battle: newBattle,
+              waiting,
             });
           }
         }
