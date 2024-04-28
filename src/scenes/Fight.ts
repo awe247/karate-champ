@@ -349,6 +349,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p1MoveHigh?.setTint(0x00ff00);
@@ -376,6 +378,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p1MoveMid?.setTint(0x00ff00);
@@ -403,6 +407,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p1MoveLow?.setTint(0x00ff00);
@@ -465,6 +471,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p2MoveHigh?.setTint(0x00ff00);
@@ -493,6 +501,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p2MoveMid?.setTint(0x00ff00);
@@ -521,6 +531,8 @@ export class Fight extends Scene {
           scene.timerCount > 0 &&
           !scene.player1KO &&
           !scene.player2KO &&
+          !scene.player1Moving &&
+          !scene.player2Moving &&
           !scene.movesSent
         ) {
           scene.p2MoveLow?.setTint(0x00ff00);
@@ -696,16 +708,24 @@ export class Fight extends Scene {
     this.battle = battle;
     this.timerCount = battle.time;
 
-    //scene.cameras.main.fadeOut(500, 0, 0, 0);
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      () => {
+        this.winnerText?.setText("");
+        this.readyTween?.restart();
+        this.p1HealthBar?.setVisible(true);
+        this.p2HealthBar?.setVisible(true);
+        this.player1Text?.setText(battle?.player1?.name ?? "Player 1");
+        this.player2Text?.setText(battle?.player2?.name ?? "CPU");
+        this.player1Sprite?.setVisible(true);
+        this.player2Sprite?.setVisible(true);
+        this.timerText?.setText(`${this.timerCount}`).setVisible(true);
+        this.showPlayerInput();
+        this.cameras.main.fadeIn(300, 0, 0, 0);
+      }
+    );
 
-    this.winnerText?.setText("");
-    this.readyTween?.restart();
-    this.p1HealthBar?.setVisible(true);
-    this.p2HealthBar?.setVisible(true);
-    this.player1Text?.setText(battle?.player1?.name ?? "Player 1");
-    this.player2Text?.setText(battle?.player2?.name ?? "CPU");
-    this.player1Sprite?.setVisible(true);
-    this.player2Sprite?.setVisible(true);
     if (battle?.player1) {
       createPlayerTexture(this, battle?.player1);
       this.player1Sprite?.setTexture(battle.player1.id);
@@ -734,7 +754,6 @@ export class Fight extends Scene {
         repeat: -1,
       });
     }
-    this.timerText?.setText(`${this.timerCount}`).setVisible(true);
 
     this.player1Moving = false;
     this.player2Moving = false;
@@ -757,8 +776,6 @@ export class Fight extends Scene {
         this.player2Sprite?.setFrame(PlayerFrame.KO);
       }
     }
-
-    setTimeout(this.showPlayerInput, 3000);
   };
 
   handleTimeUpdate = (args: { time: number }) => {
