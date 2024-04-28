@@ -292,6 +292,10 @@ export class Fight extends Scene {
       scene.fxReadyFight?.play();
       scene.readyTitle?.setVisible(true);
     });
+    this.readyTween.on("restart", () => {
+      scene.fxReadyFight?.play();
+      scene.readyTitle?.setVisible(true);
+    });
     this.readyTween.on("complete", () => {
       scene.readyTitle?.setVisible(false);
       scene.fightTitle?.setVisible(true);
@@ -612,6 +616,24 @@ export class Fight extends Scene {
 
     this.socket?.on("gameUpdate", this.handleGameUpdate);
 
+    this.socket?.on("gameOver", (args: { rounds: RoundResult[] }) => {
+      const { rounds } = args;
+      const { roomKey, socket } = this;
+      this.cameras.main.fadeOut(500, 0, 0, 0);
+      this.cameras.main.once(
+        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+        () => {
+          scene.scene.start("Matchups", {
+            roomKey,
+            socket,
+            rounds,
+            currentRound: rounds.length - 1,
+            currentBattle: 0,
+          });
+        }
+      );
+    });
+
     EventBus.emit("current-scene-ready", this);
 
     const { roomKey, currentRound, currentBattle } = scene;
@@ -777,6 +799,9 @@ export class Fight extends Scene {
 
   handleMove = (args: { hidePlayer1?: boolean; hidePlayer2?: boolean }) => {
     const { hidePlayer1, hidePlayer2 } = args;
+    console.log(
+      `handleMove - hidePlayer1: ${hidePlayer1} hidePlayer2: ${hidePlayer2}`
+    );
     if (hidePlayer1 !== undefined) {
       this.p1ThoughtBubble?.setVisible(!hidePlayer1);
       if (this.battle?.player1?.id === this.socket?.id) {
@@ -839,14 +864,17 @@ export class Fight extends Scene {
       const healthP1 = battle.player1.health;
       const healthP2 = battle.player2?.health ?? battle.cpuHealth ?? 0;
       this.animateSequence(sequence, healthP1, healthP2);
-      if (this.movesSent) {
-        this.movesSent = false;
-        this.attackPicked = BattleAttack.None;
-        const scene = this;
-        setTimeout(() => scene.handleMove({ hidePlayer1, hidePlayer2 }), 1200);
-      }
+
+      this.movesSent = false;
+      this.attackPicked = BattleAttack.None;
     }
 
+    if (battle.time <= 0) {
+      this.winnerText?.setText("Time's up!");
+      this.readyButton?.setVisible(true);
+    }
+
+    this.handleMove({ hidePlayer1, hidePlayer2 });
     this.battle = battle;
   };
 
@@ -955,6 +983,12 @@ export class Fight extends Scene {
           ? this.battle?.player2?.name ?? "CPU"
           : this.battle?.player1.name;
         this.winnerText?.setText(`${winner} wins!`);
+      }
+    }
+    if (this.timerCount <= 0) {
+      if (!this.waiting) {
+        this.readyButton?.setVisible(true);
+        this.winnerText?.setText("Time's up!");
       }
     }
     this.showPlayerInput();

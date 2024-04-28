@@ -89,20 +89,6 @@ export class Matchups extends Scene {
       });
     });
 
-    this.socket?.on("fight", (args) => {
-      const { roomKey, socket } = scene;
-      const { battle } = args;
-      scene.cameras.main.fadeOut(500, 0, 0, 0);
-      scene.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          scene.sound.stopByKey("matchups-song");
-          scene.scene.stop("Matchups");
-          scene.scene.start("Fight", { roomKey, socket, battle });
-        }
-      );
-    });
-
     EventBus.emit("current-scene-ready", this);
   }
 }

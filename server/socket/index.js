@@ -203,6 +203,11 @@ module.exports = (io) => {
       if (gameRooms[roomKey].started) {
         if (gameRooms[roomKey].finalWinner) {
           // todo: go to the end scene
+          const rounds = getMatchupDescriptions(
+            gameRooms[roomKey],
+            gameRooms[roomKey].finalWinner
+          );
+          io.in(roomKey).emit("gameOver", { rounds });
         } else {
           let battle =
             gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
@@ -238,6 +243,39 @@ module.exports = (io) => {
                 currentRound: r,
                 currentBattle: b,
               });
+
+              gameRooms[roomKey].timer = setInterval(() => {
+                if (battle.time > 0) {
+                  battle.time--;
+                  io.in(roomKey).emit("timeUpdate", { time: battle.time });
+                } else {
+                  clearInterval(gameRooms[roomKey].timer);
+                  delete gameRooms[roomKey].timer;
+
+                  // time's up
+                  const wr = gameRooms[roomKey].currentRound;
+                  const wb = gameRooms[roomKey].currentBattle;
+                  const timeUpBattle =
+                    gameRooms[roomKey].rounds[wr].battles[wb];
+                  if (!timeUpBattle.winner) {
+                    timeUpBattle.winner = `${timeUpBattle.player1.name} by default`;
+                    const winningPlayer = timeUpBattle.player1;
+                    if (!moveWinnerToNextRound(roomKey, winningPlayer)) {
+                      console.log(gameRooms[roomKey].rounds?.length);
+                      gameRooms[roomKey].finalWinner = winningPlayer ?? {
+                        id: "cpu",
+                        name: "CPU",
+                      };
+                    }
+
+                    io.in(roomKey).emit("battleUpdate", {
+                      battle: timeUpBattle,
+                      hidePlayer1: true,
+                      hidePlayer2: true,
+                    });
+                  }
+                }
+              }, 1000);
             }
           }
         }
@@ -273,7 +311,29 @@ module.exports = (io) => {
                 } else {
                   clearInterval(gameRooms[roomKey].timer);
                   delete gameRooms[roomKey].timer;
+
                   // todo: send time's up
+                  const wr = gameRooms[roomKey].currentRound;
+                  const wb = gameRooms[roomKey].currentBattle;
+                  const timeUpBattle =
+                    gameRooms[roomKey].rounds[wr].battles[wb];
+                  if (!timeUpBattle.winner) {
+                    timeUpBattle.winner = `${timeUpBattle.player1.name} by default`;
+                    const winningPlayer = timeUpBattle.player1;
+                    if (!moveWinnerToNextRound(roomKey, winningPlayer)) {
+                      console.log(gameRooms[roomKey].rounds?.length);
+                      gameRooms[roomKey].finalWinner = winningPlayer ?? {
+                        id: "cpu",
+                        name: "CPU",
+                      };
+                    }
+
+                    io.in(roomKey).emit("battleUpdate", {
+                      battle: timeUpBattle,
+                      hidePlayer1: true,
+                      hidePlayer2: true,
+                    });
+                  }
                 }
               }, 1000);
             }, 2000);
@@ -529,109 +589,6 @@ module.exports = (io) => {
         }
       }
     });
-
-    // // counter ran out
-    // socket.on("timesUp", (args) => {
-    //   const { roomKey } = args;
-    //   const roomInfo = gameRooms[roomKey];
-    //   if (roomInfo?.started) {
-    //     let { currentRound, currentBattle } = roomInfo;
-
-    //     if (currentRound < roomInfo.rounds?.length) {
-    //       const round = roomInfo.rounds[currentRound];
-
-    //       if (currentBattle < round.battles.length) {
-    //         const battle = round?.battles[currentBattle];
-    //         let winningPlayer = undefined;
-
-    //         if (!battle.winner) {
-    //           // determine who wins based on health remaining...
-    //           if (
-    //             battle.player1.health !==
-    //             (battle.player2?.health ?? battle.cpuHealth)
-    //           ) {
-    //             if (battle.player2) {
-    //               if (battle.player2.health > battle.player1.health) {
-    //                 battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
-    //                 battle.player1.health = 0;
-    //                 winningPlayer = battle.player2;
-    //               } else {
-    //                 battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
-    //                 battle.player2.health = 0;
-    //                 winningPlayer = battle.player1;
-    //               }
-    //             } else {
-    //               if (battle.cpuHealth > battle.player1.health) {
-    //                 battle.winner = `CPU def. ${battle.player1.name}`;
-    //                 battle.player1.health = 0;
-    //               } else {
-    //                 battle.winner = `${battle.player1.name} def. CPU`;
-    //                 battle.cpuHealth = 0;
-    //                 winningPlayer = battle.player1;
-    //               }
-    //             }
-    //           } else if (battle.moves.length > 0) {
-    //             // if that's equal then whoever has already made a move this battle...
-    //             if (battle.moves[0].playerId === battle.player1.id) {
-    //               battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
-    //               battle.player2.health = 0;
-    //               winningPlayer = battle.player1;
-    //             } else {
-    //               battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
-    //               battle.player1.health = 0;
-    //               winningPlayer = battle.player2;
-    //             }
-    //           } else {
-    //             // if still no one then player 1 wins arbitrarily
-    //             battle.winner = `${battle.player1.name} by default`;
-    //             if (battle.player2) {
-    //               battle.player2.health = 0;
-    //             } else {
-    //               battle.cpuHealth = 0;
-    //             }
-    //             winningPlayer = battle.player1;
-    //           }
-
-    //           const battleUpdate = { ...battle, moves: [] };
-
-    //           io.in(roomKey).emit("battleComplete", { battleUpdate });
-
-    //           if (!moveWinnerToNextRound(roomInfo, winningPlayer)) {
-    //             // set final winner
-    //             gameRooms[roomKey].finalWinner = winningPlayer;
-    //           } else {
-    //             currentBattle++;
-    //             if (round.battles.length <= currentBattle) {
-    //               currentRound++;
-    //               currentBattle = 0;
-    //             }
-    //             roomInfo.currentRound = currentRound;
-    //             roomInfo.currentBattle = currentBattle;
-    //           }
-
-    //           // setTimeout(() => {
-    //           //   const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-    //           //   io.in(roomKey).emit("showMatchups", {
-    //           //     rounds,
-    //           //     currentRound,
-    //           //     currentBattle,
-    //           //   });
-
-    //           //   if (currentRound < gameRooms[roomKey].rounds.length) {
-    //           //     setTimeout(() => {
-    //           //       const battle =
-    //           //         gameRooms[roomKey].rounds[currentRound].battles[
-    //           //           currentBattle
-    //           //         ];
-    //           //       io.in(roomKey).emit("fight", { battle });
-    //           //     }, 8000);
-    //           //   }
-    //           // }, 3000);
-    //         }
-    //       }
-    //     }
-    //   }
-    // });
 
     // when a player disconnects, remove them from our players object
     socket.on("disconnect", function () {
