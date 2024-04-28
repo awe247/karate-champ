@@ -288,12 +288,6 @@ export class Fight extends Scene {
       paused: true,
     });
 
-    this.readyTween.on("start", () => {
-      scene.fxReadyFight?.play();
-    });
-    this.readyTween.on("restart", () => {
-      scene.fxReadyFight?.play();
-    });
     this.readyTween.on("repeat", () => {
       scene.readyTween?.pause();
       scene.readyTitle?.setVisible(false);
@@ -691,6 +685,7 @@ export class Fight extends Scene {
     this.readyTween?.seek(0);
     this.fightTween?.seek(0);
     this.readyTween?.play();
+    this.fxReadyFight?.play();
     this.p1HealthBar?.setVisible(true);
     this.p2HealthBar?.setVisible(true);
     this.player1Text?.setText(this.battle?.player1?.name ?? "Player 1");
@@ -720,6 +715,7 @@ export class Fight extends Scene {
         this.readyTween?.seek(0);
         this.fightTween?.seek(0);
         this.readyTween?.play();
+        this.fxReadyFight?.play();
         this.p1HealthBar?.setVisible(true);
         this.p2HealthBar?.setVisible(true);
         this.player1Text?.setText(battle?.player1?.name ?? "Player 1");
