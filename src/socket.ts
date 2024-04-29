@@ -2,6 +2,6 @@ import { createContext } from "react";
 import socketIOClient, { Socket } from "socket.io-client";
 
 //export const ENDPOINT = "http://localhost:8080"; // Update with your server's URL
-export const ENDPOINT = "https://karate-champ.onrender.com:8080";
+export const ENDPOINT = "https://karate-champ.onrender.com";
 export const socket = socketIOClient(ENDPOINT);
 export const SocketContext = createContext<{ socket: Socket } | null>(null);
