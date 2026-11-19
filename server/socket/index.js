@@ -1,758 +1,545 @@
+// Tournament server. The rules this implements are written down in
+// test/EXPECTED_BEHAVIOR.md and checked by `npm test`.
+
+const MAX_PLAYERS = 32;
+const BATTLE_TIME = 60;
+const START_HEALTH = 100;
+const BLOCKED_DAMAGE = 30;
+const FULL_DAMAGE = 60;
+const READY_DELAY = 2000; // "READY... FIGHT!" before the first battle
+const STRIKE_DELAY = 1000; // pause before each strike in an exchange
+const CPU = Object.freeze({ id: "cpu", name: "CPU" });
+
 const gameRooms = {
   // [roomKey]: {
-  //  players: PlayerMap,
-  //  numPlayers: 0
-  //  started: false,
-  //  rounds: Round[]
+  //   roomKey, hostId, players: PlayerMap (connected players only),
+  //   numPlayers, started, rounds: Round[], currentRound, currentBattle,
+  //   timer, finalWinner
   // }
 };
 
 module.exports = (io) => {
   io.on("connection", (socket) => {
-    console.log(
-      `A socket connection to the server has been made: ${socket.id}`
-    );
+    console.log(`A socket connection to the server has been made: ${socket.id}`);
+
+    // Every handler is guarded: one bad message must never crash the server
+    // (that would end every game running on it).
+    const on = (event, handler) =>
+      socket.on(event, async (...args) => {
+        try {
+          await handler(...args);
+        } catch (err) {
+          console.error(`Error handling "${event}" from ${socket.id}:`, err);
+        }
+      });
+
+    const emitGameUpdate = (room) => {
+      const battle = currentBattleOf(room);
+      socket.emit("gameUpdate", {
+        rounds: getMatchupDescriptions(room),
+        currentRound: room.currentRound,
+        currentBattle: room.currentBattle,
+        battle: toPublic(battle),
+        waiting: !!battle.waiting?.includes(socket.id),
+      });
+    };
 
     // create and join the room
-    socket.on("createGame", async function (args) {
-      const { playerName, hairColor, skinColor, eyeColor, giColor } = args;
+    on("createGame", (args = {}) => {
       let key = codeGenerator();
-      while (Object.keys(gameRooms).includes(key)) {
-        key = codeGenerator();
-      }
-      gameRooms[key] = {
+      while (gameRooms[key]) key = codeGenerator();
+      const room = {
         roomKey: key,
+        hostId: socket.id,
         players: {},
-        numPlayers: 1,
+        numPlayers: 0,
         started: false,
         rounds: [],
       };
-      gameRooms[key].players[socket.id] = {
-        id: socket.id,
-        name: playerName,
-        hairColor,
-        skinColor,
-        eyeColor,
-        giColor,
-      };
-      const { players } = gameRooms[key];
+      gameRooms[key] = room;
+      addPlayer(room, socket, args);
       socket.join(key);
-      socket.emit("roomCreated", { roomKey: key, players });
+      socket.emit("roomCreated", { roomKey: key, players: room.players });
     });
 
     // check for the existence of a room
-    socket.on("isCodeValid", function (args) {
-      const { joinCode } = args;
-      if (Object.keys(gameRooms).includes(joinCode)) {
-        if (gameRooms[joinCode].numPlayers < 32) {
-          if (!gameRooms[joinCode].started) {
-            socket.emit("codeIsValid", joinCode);
-          } else {
-            socket.emit("codeNotValid", "Game in progress.");
-          }
-        } else {
-          socket.emit("codeNotValid", "Room full.");
-        }
-      } else {
-        socket.emit("codeNotValid");
-      }
+    on("isCodeValid", (args = {}) => {
+      const joinCode = normalizeCode(args.joinCode);
+      const problem = whyCannotJoin(joinCode);
+      if (problem) socket.emit("codeNotValid", problem);
+      else socket.emit("codeIsValid", joinCode);
     });
 
     // join the room
-    socket.on("joinRoom", (args) => {
-      const { playerName, hairColor, skinColor, eyeColor, giColor, joinCode } =
-        args;
-      gameRooms[joinCode].players[socket.id] = {
-        id: socket.id,
-        name: playerName,
-        hairColor,
-        skinColor,
-        eyeColor,
-        giColor,
-      };
+    on("joinRoom", (args = {}) => {
+      const joinCode = normalizeCode(args.joinCode);
+      const problem = whyCannotJoin(joinCode);
+      if (problem) {
+        socket.emit("codeNotValid", problem);
+        return;
+      }
+      const room = gameRooms[joinCode];
+      addPlayer(room, socket, args);
       socket.join(joinCode);
-
-      // update number of players
-      const { players } = gameRooms[joinCode];
-
-      gameRooms[joinCode].numPlayers = Object.keys(players).length;
-
-      socket.emit("roomJoined", { roomKey: joinCode, players });
-
-      // update all other players of the new player
-      socket.to(joinCode).emit("roomUpdate", { players });
+      socket.emit("roomJoined", { roomKey: joinCode, players: room.players });
+      socket.to(joinCode).emit("roomUpdate", { players: room.players });
     });
 
-    // start the game
-    socket.on("startGame", (args) => {
-      const { roomKey } = args;
-      gameRooms[roomKey].started = true;
-      const { players } = gameRooms[roomKey];
-      const currentRound = 0;
-      const currentBattle = 0;
-      gameRooms[roomKey].rounds = createRounds(players);
-      gameRooms[roomKey].currentRound = currentRound;
-      gameRooms[roomKey].currentBattle = currentBattle;
-      const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-      const battle =
-        gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-
-      io.in(roomKey).emit("gameUpdate", {
-        battle,
-        rounds,
-        currentRound,
-        currentBattle,
+    // start the game (host only, once)
+    on("startGame", (args = {}) => {
+      const room = gameRooms[args.roomKey];
+      if (!room || room.started || room.hostId !== socket.id) return;
+      room.started = true;
+      room.rounds = [buildRound(1, Object.values(room.players))];
+      room.currentRound = 0;
+      room.currentBattle = 0;
+      const battle = currentBattleOf(room);
+      io.in(room.roomKey).emit("gameUpdate", {
+        battle: toPublic(battle),
+        rounds: getMatchupDescriptions(room),
+        currentRound: 0,
+        currentBattle: 0,
       });
     });
 
     // client has requested the latest game state
-    socket.on("needUpdate", (args) => {
-      const { roomKey } = args;
-      if (gameRooms[roomKey]?.started) {
-        const { currentRound, currentBattle } = gameRooms[roomKey];
-        const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-        const battle =
-          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-        const waiting = battle.waiting && battle.waiting.includes(socket.id);
-
-        socket.emit("gameUpdate", {
-          rounds,
-          currentRound,
-          currentBattle,
-          battle,
-          waiting,
-        });
-      }
+    on("needUpdate", (args = {}) => {
+      const room = gameRooms[args.roomKey];
+      if (room?.started) emitGameUpdate(room);
     });
 
-    // client has asked if moves are required
-    socket.on("checkMovesSent", (args, callback) => {
-      const { roomKey } = args;
-      if (gameRooms[roomKey]?.started) {
-        const { currentRound, currentBattle } = gameRooms[roomKey];
-        const battle =
-          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-        let moveSent = false;
-
-        if (
-          battle.ready &&
-          !battle.winner &&
-          (battle?.player1?.id === socket?.id ||
-            battle?.player2?.id === socket?.id) &&
-          battle.moves?.length > 1
-        ) {
-          movesSent =
-            battle.moves[0].playerId === socket?.id ||
-            (battle.moves[1].playerId === socket?.id &&
-              battle.moves[1].attack !== 0);
-        }
-
-        callback(moveSent);
-      }
+    // client has asked whether its moves for this exchange are in
+    on("checkMovesSent", (args = {}, callback) => {
+      if (typeof callback !== "function") return;
+      const room = gameRooms[args.roomKey];
+      const battle = room?.started && currentBattleOf(room);
+      callback(!!(battle && battle.pending?.[socket.id]));
     });
 
     // client has asked for the state of the input controls
-    socket.on("checkInputStatus", (args, callback) => {
-      const { roomKey } = args;
-      let showP1 = false;
-      let showP2 = false;
-      let showInputsP1 = false;
-      let showInputsP2 = false;
-
-      if (gameRooms[roomKey]?.started) {
-        const { currentRound, currentBattle } = gameRooms[roomKey];
-        const battle =
-          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-
-        if (battle.ready && !battle.winner) {
-          const id1 = battle?.player1?.id;
-          const id2 = battle?.player2?.id;
-          if (!!id1?.length) {
-            showP1 = true;
-            if (battle.moves?.length > 1) {
-              showP1 =
-                (battle.moves[0].playerId !== id1 &&
-                  battle.moves[1].playerId !== id1) ||
-                (battle.moves[1].playerId === id1 &&
-                  battle.moves[1].attack === 0);
-            }
-            showInputsP1 = showP1 && id1 === socket.id;
-          }
-          if (!!id2?.length) {
-            showP2 = true;
-            if (battle.moves?.length > 1) {
-              showP2 =
-                (battle.moves[0].playerId !== id2 &&
-                  battle.moves[1].playerId !== id2) ||
-                (battle.moves[1].playerId === id2 &&
-                  battle.moves[1].attack === 0);
-            }
-            showInputsP2 = showP2 && id2 === socket.id;
-          }
-        }
+    on("checkInputStatus", (args = {}, callback) => {
+      if (typeof callback !== "function") return;
+      const status = { showP1: false, showP2: false, showInputsP1: false, showInputsP2: false };
+      const room = gameRooms[args.roomKey];
+      const battle = room?.started && currentBattleOf(room);
+      if (battle && battle.live && !battle.winner && !battle.resolving) {
+        const id1 = battle.player1?.id;
+        const id2 = battle.player2?.id;
+        status.showP1 = !!id1 && !battle.pending?.[id1];
+        status.showP2 = !!id2 && !battle.pending?.[id2];
+        status.showInputsP1 = status.showP1 && id1 === socket.id;
+        status.showInputsP2 = status.showP2 && id2 === socket.id;
       }
-
-      callback({
-        showP1,
-        showP2,
-        showInputsP1,
-        showInputsP2,
-      });
+      callback(status);
     });
 
-    socket.on("sendNext", (args) => {
-      const { roomKey, currentRound, currentBattle } = args;
-      if (gameRooms[roomKey].started) {
-        if (gameRooms[roomKey].finalWinner) {
-          // todo: go to the end scene
-          const rounds = getMatchupDescriptions(
-            gameRooms[roomKey],
-            gameRooms[roomKey].finalWinner
-          );
-          io.in(roomKey).emit("gameOver", { rounds });
-        } else {
-          let battle =
-            gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-
-          if (battle.ready && battle.winner) {
-            if (!battle.waiting?.length) {
-              battle.waiting = [socket.id];
-            }
-
-            if (!battle.waiting.includes(socket.id)) {
-              battle.waiting.push(socket.id);
-            }
-
-            // todo: maybe add this to disconnect as well in case the last person waiting leaves?
-            if (battle.waiting.length === gameRooms[roomKey].numPlayers) {
-              const { currentRound, currentBattle } = gameRooms[roomKey];
-              let b = currentBattle + 1;
-              let r = currentRound;
-              if (gameRooms[roomKey].rounds[currentRound].battles.length <= b) {
-                r = currentRound + 1;
-                b = 0;
-              }
-
-              battle = gameRooms[roomKey].rounds[r].battles[b];
-              gameRooms[roomKey].currentRound = r;
-              gameRooms[roomKey].currentBattle = b;
-              battle.ready = true;
-
-              const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-              io.in(roomKey).emit("next", {
-                rounds,
-                battle,
-                currentRound: r,
-                currentBattle: b,
-              });
-
-              gameRooms[roomKey].timer = setInterval(() => {
-                if (battle.time > 0) {
-                  battle.time--;
-                  io.in(roomKey).emit("timeUpdate", { time: battle.time });
-                } else {
-                  clearInterval(gameRooms[roomKey].timer);
-                  delete gameRooms[roomKey].timer;
-
-                  // time's up
-                  const wr = gameRooms[roomKey].currentRound;
-                  const wb = gameRooms[roomKey].currentBattle;
-                  const timeUpBattle =
-                    gameRooms[roomKey].rounds[wr].battles[wb];
-                  if (!timeUpBattle.winner) {
-                    timeUpBattle.winner = `${timeUpBattle.player1.name} by default`;
-                    const winningPlayer = timeUpBattle.player1;
-                    if (!moveWinnerToNextRound(roomKey, winningPlayer)) {
-                      console.log(gameRooms[roomKey].rounds?.length);
-                      gameRooms[roomKey].finalWinner = winningPlayer ?? {
-                        id: "cpu",
-                        name: "CPU",
-                      };
-                    }
-
-                    io.in(roomKey).emit("battleUpdate", {
-                      battle: timeUpBattle,
-                      hidePlayer1: true,
-                      hidePlayer2: true,
-                    });
-                  }
-                }
-              }, 1000);
-            }
-          }
-        }
+    // a player has pressed READY on the result screen
+    on("sendNext", (args = {}) => {
+      const room = gameRooms[args.roomKey];
+      if (!room?.started || !room.players[socket.id]) return;
+      // Ignore repeated/stale READYs for a battle that is no longer current.
+      if (args.currentRound !== room.currentRound || args.currentBattle !== room.currentBattle) {
+        return;
       }
+      const battle = currentBattleOf(room);
+      if (!battle.winner) return;
+
+      if (room.finalWinner) {
+        io.in(room.roomKey).emit("gameOver", { rounds: getMatchupDescriptions(room) });
+        return;
+      }
+
+      battle.waiting = battle.waiting ?? [];
+      if (!battle.waiting.includes(socket.id)) battle.waiting.push(socket.id);
+      advanceIfEveryoneWaiting(io, room);
     });
 
-    socket.on("sendReady", (args) => {
-      const { roomKey, currentRound, currentBattle } = args;
-      if (currentRound === undefined || currentBattle === undefined) return;
+    // a fighter's screen has loaded the first battle
+    on("sendReady", (args = {}) => {
+      const room = gameRooms[args.roomKey];
+      const { currentRound, currentBattle } = args;
+      if (!room?.started || currentRound === undefined || currentBattle === undefined) return;
 
-      if (gameRooms[roomKey].started) {
-        const battle =
-          gameRooms[roomKey].rounds[currentRound].battles[currentBattle];
-
-        if (
-          gameRooms[roomKey].currentRound === currentRound &&
-          gameRooms[roomKey].currentBattle === currentBattle
-        ) {
-          // want at least one of the players in the battle
-          if (
-            !battle.ready &&
-            (battle.player1?.id === socket.id ||
-              battle.player2?.id === socket.id)
-          ) {
-            battle.ready = true;
-            setTimeout(() => {
-              io.in(roomKey).emit("ready");
-
-              gameRooms[roomKey].timer = setInterval(() => {
-                if (battle.time > 0) {
-                  battle.time--;
-                  io.in(roomKey).emit("timeUpdate", { time: battle.time });
-                } else {
-                  clearInterval(gameRooms[roomKey].timer);
-                  delete gameRooms[roomKey].timer;
-
-                  // todo: send time's up
-                  const wr = gameRooms[roomKey].currentRound;
-                  const wb = gameRooms[roomKey].currentBattle;
-                  const timeUpBattle =
-                    gameRooms[roomKey].rounds[wr].battles[wb];
-                  if (!timeUpBattle.winner) {
-                    timeUpBattle.winner = `${timeUpBattle.player1.name} by default`;
-                    const winningPlayer = timeUpBattle.player1;
-                    if (!moveWinnerToNextRound(roomKey, winningPlayer)) {
-                      console.log(gameRooms[roomKey].rounds?.length);
-                      gameRooms[roomKey].finalWinner = winningPlayer ?? {
-                        id: "cpu",
-                        name: "CPU",
-                      };
-                    }
-
-                    io.in(roomKey).emit("battleUpdate", {
-                      battle: timeUpBattle,
-                      hidePlayer1: true,
-                      hidePlayer2: true,
-                    });
-                  }
-                }
-              }, 1000);
-            }, 2000);
-          }
-        } else {
-          // if the battle is in play and we are receiving a ready...
-          // or if the battle is over... ask them to update
-          if ((!!battle.ready && gameRooms[roomKey].timer) || !!battle.winner) {
-            const rounds = getMatchupDescriptions(gameRooms[roomKey]);
-            const newBattle =
-              gameRooms[roomKey].rounds[gameRooms[roomKey].currentRound]
-                .battles[gameRooms[roomKey].currentBattle];
-            const waiting =
-              newBattle.waiting && newBattle.waiting.includes(socket.id);
-            socket.emit("gameUpdate", {
-              rounds,
-              currentRound: gameRooms[roomKey].currentRound,
-              currentBattle: gameRooms[roomKey].currentBattle,
-              battle: newBattle,
-              waiting,
-            });
-          }
-        }
+      if (room.currentRound !== currentRound || room.currentBattle !== currentBattle) {
+        // This client is behind; bring it up to date.
+        emitGameUpdate(room);
+        return;
       }
+
+      const battle = currentBattleOf(room);
+      if (battle.ready || battle.winner || !isFighter(battle, socket.id)) return;
+      battle.ready = true;
+      setTimeout(() => {
+        if (battle.winner || gameRooms[room.roomKey] !== room) return;
+        io.in(room.roomKey).emit("ready");
+        startClock(io, room, battle);
+      }, READY_DELAY);
     });
 
     // process moves
-    socket.on("sendMoves", async (args) => {
-      const BLOCKED_DAMAGE = 30;
-      const FULL_DAMAGE = 60;
-      const { roomKey, attack, defend } = args;
-      const roomInfo = gameRooms[roomKey];
+    on("sendMoves", async (args = {}) => {
+      const room = gameRooms[args.roomKey];
+      if (!room?.started) return;
+      const battle = currentBattleOf(room);
+      const { attack, defend } = args;
+      console.log(`room:${args.roomKey} player:${socket.id} (a:${attack} d:${defend})`);
 
-      console.log(
-        `room:${roomKey} player:${socket.id} (a:${attack} d:${defend})`
-      );
+      if (!battle.live || battle.winner || battle.resolving) return;
+      if (!isFighter(battle, socket.id)) return;
+      if (!isMove(attack) || !isMove(defend)) return;
+      battle.pending = battle.pending ?? {};
+      battle.order = battle.order ?? [];
+      if (battle.pending[socket.id]) return; // already moved this exchange
 
-      if (roomInfo?.started) {
-        let { currentRound, currentBattle } = roomInfo;
+      battle.pending[socket.id] = { attack, defend };
+      battle.order.push(socket.id);
+      const isP1 = battle.player1.id === socket.id;
+      io.in(room.roomKey).emit("moveUpdate", isP1 ? { hidePlayer1: true } : { hidePlayer2: true });
 
-        if (currentRound < roomInfo.rounds?.length) {
-          const round = roomInfo.rounds[currentRound];
-
-          if (currentBattle < round.battles.length) {
-            const battle = round?.battles[currentBattle];
-            let winningPlayer = undefined;
-
-            if (battle.player1.id === socket.id) {
-              io.in(roomKey).emit("moveUpdate", { hidePlayer1: true });
-
-              // if battling the cpu then resolve player1 moves first
-              if (!battle.player2) {
-                const cpuAttack = getRandomInt(1, 4);
-                const cpuDefend = getRandomInt(1, 4);
-
-                console.log(`CPU attack: ${cpuAttack} defend: ${cpuDefend}`);
-
-                await delay(1000).then(async () => {
-                  const seq1 = {
-                    playerId: battle.player1.id,
-                    attack,
-                    opponentResponse: cpuDefend,
-                  };
-
-                  battle.cpuHealth -=
-                    attack === cpuDefend ? BLOCKED_DAMAGE : FULL_DAMAGE;
-
-                  let battleIsOver = battle.cpuHealth <= 0;
-                  if (battleIsOver) {
-                    battle.winner = `${battle.player1.name} def. CPU`;
-                    winningPlayer = battle.player1;
-                  }
-
-                  io.in(roomKey).emit("battleUpdate", {
-                    battle,
-                    sequence: seq1,
-                    hidePlayer1: battleIsOver,
-                  });
-
-                  if (!battleIsOver) {
-                    await delay(1000).then(() => {
-                      const seq2 = {
-                        playerId: "cpu",
-                        attack: cpuAttack,
-                        opponentResponse: defend,
-                      };
-
-                      battle.player1.health -=
-                        cpuAttack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
-
-                      battleIsOver = battle.player1.health <= 0;
-                      if (battleIsOver) {
-                        battle.winner = `CPU def. ${battle.player1.name}`;
-                      }
-
-                      io.in(roomKey).emit("battleUpdate", {
-                        battle,
-                        sequence: seq2,
-                        hidePlayer1: battleIsOver,
-                      });
-                    });
-                  }
-                });
-              } else if (battle.moves?.length > 1) {
-                // player 1 somehow already registered moves
-                if (battle.moves[0].playerId === battle.player1.id) {
-                  return;
-                }
-
-                console.log(`P1 attack: ${attack} defend: ${defend}`);
-
-                const seq2 = battle.moves.pop();
-                const seq1 = battle.moves.pop();
-                seq1.opponentResponse = defend;
-                seq2.attack = attack;
-
-                await delay(1000).then(async () => {
-                  battle.player1.health -=
-                    seq1.attack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
-
-                  let battleIsOver = battle.player1.health <= 0;
-                  if (battleIsOver) {
-                    battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
-                    winningPlayer = battle.player2;
-                  }
-
-                  io.in(roomKey).emit("battleUpdate", {
-                    battle,
-                    sequence: seq1,
-                    hidePlayer1: battleIsOver,
-                    hidePlayer2: battleIsOver,
-                  });
-
-                  if (!battleIsOver) {
-                    await delay(1000).then(() => {
-                      battle.player2.health -=
-                        attack === seq2.opponentResponse
-                          ? BLOCKED_DAMAGE
-                          : FULL_DAMAGE;
-
-                      battleIsOver = battle.player2.health <= 0;
-                      if (battleIsOver) {
-                        battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
-                        winningPlayer = battle.player1;
-                      }
-
-                      io.in(roomKey).emit("battleUpdate", {
-                        battle,
-                        sequence: seq2,
-                        hidePlayer1: battleIsOver,
-                        hidePlayer2: battleIsOver,
-                      });
-                    });
-                  }
-                });
-              } else {
-                // otherwise just store the moves
-                console.log(`P1 attack: ${attack} defend: ${defend}`);
-
-                battle.moves.push({
-                  playerId: battle.player1.id,
-                  attack,
-                  opponentResponse: 0,
-                });
-                battle.moves.push({
-                  playerId: battle.player2.id,
-                  attack: 0,
-                  opponentResponse: defend,
-                });
-              }
-            } else if (battle.player2?.id === socket.id) {
-              io.in(roomKey).emit("moveUpdate", { hidePlayer2: true });
-
-              // if player has moved then resolve their moves first
-              if (battle.moves?.length > 1) {
-                // player 2 somehow already registered moves
-                if (battle.moves[0].playerId === battle.player2.id) {
-                  return;
-                }
-
-                console.log(`P2 attack: ${attack} defend: ${defend}`);
-
-                const seq2 = battle.moves.pop();
-                const seq1 = battle.moves.pop();
-                seq1.opponentResponse = defend;
-                seq2.attack = attack;
-
-                await delay(1000).then(async () => {
-                  battle.player2.health -=
-                    seq1.attack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
-
-                  let battleIsOver = battle.player2.health <= 0;
-                  if (battleIsOver) {
-                    battle.winner = `${battle.player1.name} def. ${battle.player2.name}`;
-                    winningPlayer = battle.player1;
-                  }
-
-                  io.in(roomKey).emit("battleUpdate", {
-                    battle,
-                    sequence: seq1,
-                    hidePlayer1: battleIsOver,
-                    hidePlayer2: battleIsOver,
-                  });
-
-                  if (!battleIsOver) {
-                    await delay(1000).then(() => {
-                      battle.player1.health -=
-                        attack === seq2.opponentResponse
-                          ? BLOCKED_DAMAGE
-                          : FULL_DAMAGE;
-
-                      battleIsOver = battle.player1.health <= 0;
-                      if (battleIsOver) {
-                        battle.winner = `${battle.player2.name} def. ${battle.player1.name}`;
-                        winningPlayer = battle.player2;
-                      }
-
-                      io.in(roomKey).emit("battleUpdate", {
-                        battle,
-                        sequence: seq2,
-                        hidePlayer1: battleIsOver,
-                        hidePlayer2: battleIsOver,
-                      });
-                    });
-                  }
-                });
-              } else {
-                console.log(`P2 attack: ${attack} defend: ${defend}`);
-
-                // otherwise just store until they do
-                battle.moves.push({
-                  playerId: battle.player2.id,
-                  attack,
-                  opponentResponse: 0,
-                });
-                battle.moves.push({
-                  playerId: battle.player1.id,
-                  attack: 0,
-                  opponentResponse: defend,
-                });
-              }
-            }
-
-            if (battle.winner) {
-              clearInterval(gameRooms[roomKey].timer);
-              delete gameRooms[roomKey].timer;
-              if (!moveWinnerToNextRound(roomKey, winningPlayer)) {
-                console.log(gameRooms[roomKey].rounds?.length);
-                gameRooms[roomKey].finalWinner = winningPlayer ?? {
-                  id: "cpu",
-                  name: "CPU",
-                };
-              }
-            }
-          }
-        }
+      if (!battle.player2) {
+        await resolveCpuExchange(io, room, battle);
+      } else if (battle.order.length === 2) {
+        await resolveExchange(io, room, battle);
       }
     });
 
-    // when a player disconnects, remove them from our players object
-    socket.on("disconnect", function () {
-      // find which room they belong to
-      let roomKey = 0;
-      for (let keys1 in gameRooms) {
-        if (gameRooms[keys1]?.players?.length) {
-          Object.keys(gameRooms[keys1].players).map((el) => {
-            if (el === socket.id) {
-              roomKey = keys1;
-            }
-          });
-        }
-      }
-
-      const roomInfo = gameRooms[roomKey];
-
-      if (roomInfo) {
-        console.log("user disconnected: ", socket.id);
-        // remove this player from our players object
-        delete roomInfo.players[socket.id];
-        // update numPlayers
-        roomInfo.numPlayers = Object.keys(roomInfo.players).length;
-        // emit a message to all players to remove this player
-        io.to(roomKey).emit("roomUpdate", {
-          players: roomInfo.players,
-        });
+    // when a player disconnects, remove them and make sure nobody waits on them
+    socket.on("disconnect", () => {
+      try {
+        handleDisconnect(io, socket);
+      } catch (err) {
+        console.error(`Error handling disconnect of ${socket.id}:`, err);
       }
     });
   });
 };
 
+// ---------------------------------------------------------------- lobby
+
+function normalizeCode(code) {
+  return typeof code === "string" ? code.trim().toUpperCase() : "";
+}
+
+function whyCannotJoin(code) {
+  const room = gameRooms[code];
+  if (!room) return "Not a valid code.";
+  if (room.started) return "Game in progress.";
+  if (room.numPlayers >= MAX_PLAYERS) return "Room full.";
+  return undefined;
+}
+
+function addPlayer(room, socket, args) {
+  const { playerName, hairColor, skinColor, eyeColor, giColor } = args;
+  room.players[socket.id] = {
+    id: socket.id,
+    name: typeof playerName === "string" && playerName.trim() ? playerName.trim().slice(0, 20) : "Player",
+    hairColor,
+    skinColor,
+    eyeColor,
+    giColor,
+  };
+  room.numPlayers = Object.keys(room.players).length;
+}
+
+function handleDisconnect(io, socket) {
+  const room = Object.values(gameRooms).find((r) => r.players[socket.id]);
+  if (!room) return;
+  console.log("user disconnected: ", socket.id);
+  delete room.players[socket.id];
+  room.numPlayers = Object.keys(room.players).length;
+
+  if (room.numPlayers === 0) {
+    stopClock(room);
+    delete gameRooms[room.roomKey];
+    return;
+  }
+
+  if (!room.started) {
+    if (room.hostId === socket.id) {
+      room.hostId = Object.keys(room.players)[0];
+      io.to(room.hostId).emit("becameHost", { roomKey: room.roomKey, players: room.players });
+    }
+    io.to(room.roomKey).emit("roomUpdate", { players: room.players });
+    return;
+  }
+
+  io.to(room.roomKey).emit("roomUpdate", { players: room.players });
+
+  const battle = currentBattleOf(room);
+  if (!battle.winner && isFighter(battle, socket.id)) {
+    const opponent = battle.player1.id === socket.id ? battle.player2 ?? CPU : battle.player1;
+    finishBattle(io, room, battle, opponent, `${opponent.name} wins by forfeit`);
+    io.in(room.roomKey).emit("battleUpdate", {
+      battle: toPublic(battle),
+      hidePlayer1: true,
+      hidePlayer2: true,
+    });
+  }
+  advanceIfEveryoneWaiting(io, room);
+}
+
+// ---------------------------------------------------------------- bracket
+
+// Pairs entrants in order; an odd one out fights the CPU. Entrants may include
+// the CPU itself if it won an earlier battle.
+function buildRound(number, entrants) {
+  const battles = [];
+  for (let i = 0; i < entrants.length; i += 2) {
+    const humans = [entrants[i], entrants[i + 1] ?? CPU].filter((e) => e.id !== CPU.id);
+    const battle = { moves: [], time: BATTLE_TIME };
+    if (humans[0]) battle.player1 = fighter(humans[0]);
+    if (humans[1]) battle.player2 = fighter(humans[1]);
+    else battle.cpuHealth = START_HEALTH;
+    battles.push(battle);
+  }
+  return { name: `Round ${number}`, battles };
+}
+
+function fighter(entrant) {
+  const { id, name, hairColor, skinColor, eyeColor, giColor } = entrant;
+  return { id, name, hairColor, skinColor, eyeColor, giColor, health: START_HEALTH };
+}
+
+function currentBattleOf(room) {
+  return room.rounds[room.currentRound].battles[room.currentBattle];
+}
+
+function isFighter(battle, id) {
+  return battle.player1?.id === id || battle.player2?.id === id;
+}
+
+// Records the result. When it was the round's last battle, builds the next
+// round from the winners, or crowns the champion.
+function finishBattle(io, room, battle, winner, text) {
+  if (battle.winner) return;
+  battle.winner = text;
+  battle.winnerEntrant = winner;
+  battle.live = false;
+  battle.resolving = false;
+  stopClock(room);
+
+  const round = room.rounds[room.currentRound];
+  if (round.battles.every((b) => b.winner)) {
+    const winners = round.battles.map((b) => b.winnerEntrant);
+    if (winners.length === 1) {
+      room.finalWinner = winners[0];
+    } else {
+      room.rounds.push(buildRound(room.rounds.length + 1, winners));
+    }
+  }
+}
+
+// A battle nobody can fight (a fighter has left, or it is CPU vs CPU) is
+// decided straight away. Returns true if it was.
+function autoResolve(io, room, battle) {
+  const here = (p) => p && room.players[p.id];
+  const { player1, player2 } = battle;
+  if (!player1) {
+    finishBattle(io, room, battle, CPU, "CPU advances");
+  } else if (player2) {
+    if (here(player1) && here(player2)) return false;
+    if (here(player2)) finishBattle(io, room, battle, player2, `${player2.name} wins by forfeit`);
+    else finishBattle(io, room, battle, player1, `${player1.name} wins by forfeit`);
+  } else {
+    if (here(player1)) return false;
+    finishBattle(io, room, battle, CPU, "CPU wins by forfeit");
+  }
+  return true;
+}
+
+function advanceIfEveryoneWaiting(io, room) {
+  const battle = currentBattleOf(room);
+  if (!battle.winner || room.finalWinner) return;
+  const waiting = battle.waiting ?? [];
+  const everyone = Object.keys(room.players).every((id) => waiting.includes(id));
+  if (everyone) advance(io, room);
+}
+
+function advance(io, room) {
+  for (;;) {
+    let r = room.currentRound;
+    let b = room.currentBattle + 1;
+    if (b >= room.rounds[r].battles.length) {
+      r += 1;
+      b = 0;
+    }
+    if (!room.rounds[r]) return; // nothing left (champion already decided)
+    room.currentRound = r;
+    room.currentBattle = b;
+    const battle = currentBattleOf(room);
+
+    if (autoResolve(io, room, battle)) {
+      if (room.finalWinner) {
+        io.in(room.roomKey).emit("gameOver", { rounds: getMatchupDescriptions(room) });
+        return;
+      }
+      continue;
+    }
+
+    battle.ready = true;
+    startClock(io, room, battle);
+    io.in(room.roomKey).emit("next", {
+      rounds: getMatchupDescriptions(room),
+      battle: toPublic(battle),
+      currentRound: r,
+      currentBattle: b,
+    });
+    return;
+  }
+}
+
+// ---------------------------------------------------------------- fighting
+
+function isMove(value) {
+  return value === 1 || value === 2 || value === 3;
+}
+
+function damage(attack, defend) {
+  return attack === defend ? BLOCKED_DAMAGE : FULL_DAMAGE;
+}
+
+function startClock(io, room, battle) {
+  stopClock(room);
+  battle.live = true;
+  room.timer = setInterval(() => {
+    if (battle.winner) {
+      stopClock(room);
+      return;
+    }
+    battle.time = Math.max(0, battle.time - 1);
+    io.in(room.roomKey).emit("timeUpdate", { time: battle.time });
+    if (battle.time <= 0) timeUp(io, room, battle);
+  }, 1000);
+}
+
+function stopClock(room) {
+  if (room.timer) clearInterval(room.timer);
+  delete room.timer;
+}
+
+// More health wins; a tie goes to player 1.
+function timeUp(io, room, battle) {
+  const p1 = battle.player1;
+  const opponent = battle.player2 ?? CPU;
+  const opponentHealth = battle.player2 ? battle.player2.health : battle.cpuHealth;
+  const winner = opponentHealth > p1.health ? opponent : p1;
+  finishBattle(io, room, battle, winner, `${winner.name} wins on time`);
+  io.in(room.roomKey).emit("battleUpdate", {
+    battle: toPublic(battle),
+    hidePlayer1: true,
+    hidePlayer2: true,
+  });
+}
+
+// Both fighters have moved. Whoever moved first strikes first.
+async function resolveExchange(io, room, battle) {
+  battle.resolving = true;
+  const [firstId, secondId] = battle.order;
+  const moves = battle.pending;
+  battle.pending = {};
+  battle.order = [];
+  const side = (id) => (battle.player1.id === id ? battle.player1 : battle.player2);
+  const strikes = [
+    [side(firstId), side(secondId), moves[firstId].attack, moves[secondId].defend],
+    [side(secondId), side(firstId), moves[secondId].attack, moves[firstId].defend],
+  ];
+
+  for (let i = 0; i < strikes.length; i++) {
+    const [attacker, defender, attack, defend] = strikes[i];
+    await delay(STRIKE_DELAY);
+    if (battle.winner) return; // time ran out or someone left meanwhile
+    defender.health -= damage(attack, defend);
+    const ko = defender.health <= 0;
+    if (ko) finishBattle(io, room, battle, attacker, `${attacker.name} def. ${defender.name}`);
+    const last = ko || i === strikes.length - 1;
+    if (last) battle.resolving = false;
+    const hide = ko || !last; // controls come back only once the exchange is over
+    io.in(room.roomKey).emit("battleUpdate", {
+      battle: toPublic(battle),
+      sequence: { playerId: attacker.id, attack, opponentResponse: defend },
+      hidePlayer1: hide,
+      hidePlayer2: hide,
+    });
+    if (ko) return;
+  }
+}
+
+// Player 1 has moved against the CPU: the player strikes, then the CPU.
+async function resolveCpuExchange(io, room, battle) {
+  battle.resolving = true;
+  const player = battle.player1;
+  const { attack, defend } = battle.pending[player.id];
+  battle.pending = {};
+  battle.order = [];
+  const cpuAttack = getRandomInt(1, 4);
+  const cpuDefend = getRandomInt(1, 4);
+  console.log(`CPU attack: ${cpuAttack} defend: ${cpuDefend}`);
+
+  await delay(STRIKE_DELAY);
+  if (battle.winner) return;
+  battle.cpuHealth -= damage(attack, cpuDefend);
+  let ko = battle.cpuHealth <= 0;
+  if (ko) finishBattle(io, room, battle, player, `${player.name} def. CPU`);
+  io.in(room.roomKey).emit("battleUpdate", {
+    battle: toPublic(battle),
+    sequence: { playerId: player.id, attack, opponentResponse: cpuDefend },
+    hidePlayer1: true,
+  });
+  if (ko) return;
+
+  await delay(STRIKE_DELAY);
+  if (battle.winner) return;
+  player.health -= damage(cpuAttack, defend);
+  ko = player.health <= 0;
+  if (ko) finishBattle(io, room, battle, CPU, `CPU def. ${player.name}`);
+  battle.resolving = false;
+  io.in(room.roomKey).emit("battleUpdate", {
+    battle: toPublic(battle),
+    sequence: { playerId: CPU.id, attack: cpuAttack, opponentResponse: defend },
+    hidePlayer1: ko,
+  });
+}
+
+// ---------------------------------------------------------------- views
+
+// What clients see of a battle (never the opponent's pending move).
+function toPublic(battle) {
+  if (!battle) return battle;
+  const { player1, player2, cpuHealth, time, ready, winner } = battle;
+  const winnerName = battle.winnerEntrant?.name;
+  return { player1, player2, cpuHealth, time, ready, winner, winnerName, moves: [] };
+}
+
+function getMatchupDescriptions(room, finalWinner = room.finalWinner) {
+  const { rounds, currentRound, currentBattle } = room;
+  const matchups = rounds.map((round, r) => ({
+    name: round.name,
+    battles: round.battles.map((battle, b) => {
+      const done = r < currentRound || (r === currentRound && b < currentBattle);
+      if (battle.winner && (done || room.finalWinner)) return battle.winner;
+      const p1 = battle.player1?.name ?? "CPU";
+      const p2 = battle.player2?.name ?? "CPU";
+      return `${p1} vs. ${p2}`;
+    }),
+  }));
+  matchups.push({ name: "Winner", battles: [finalWinner?.name ?? "???"] });
+  return matchups;
+}
+
+// ---------------------------------------------------------------- utils
+
 function codeGenerator() {
   let code = "";
-  let chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
   for (let i = 0; i < 5; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
 }
 
+// The maximum is exclusive and the minimum is inclusive
 function getRandomInt(min, max) {
-  const minCeiled = Math.ceil(min);
-  const maxFloored = Math.floor(max);
-  // The maximum is exclusive and the minimum is inclusive
-  return Math.floor(Math.random() * (maxFloored - minCeiled) + minCeiled);
-}
-
-// function getTestBattles() {
-//   const rounds = [];
-//   for (let i = 0; i < 5; i++) {
-//     const r = {
-//       name: `Round ${i}`,
-//       battles: [],
-//     };
-//     for (let j = 0; j < 30; j++) {
-//       r.battles.push(`Player ABC${j} vs. Player DEF${j}`);
-//     }
-//     rounds.push(r);
-//   }
-//   return rounds;
-// }
-
-function createRounds(players) {
-  const orderedPairs = Object.values(players)
-    .sort((a, b) => (a.id < b.id ? -1 : 1))
-    .reduce(function (result, value, index, arr) {
-      if (index % 2 === 0) {
-        result.push(arr.slice(index, index + 2).map((p) => p.id));
-      }
-      return result;
-    }, []);
-
-  const round = {
-    name: "Round 1",
-    battles: [],
-  };
-
-  orderedPairs.forEach((pair, i) => {
-    const player1 = players[pair[0]];
-    const battle = {
-      player1: { ...player1, id: pair[0], health: 100 },
-      moves: [],
-      time: 60,
-    };
-    if (pair.length > 1 && pair[1] !== undefined) {
-      const player2 = players[pair[1]];
-      battle.player2 = { ...player2, id: pair[1], health: 100 };
-    } else {
-      battle.cpuHealth = 100;
-    }
-    round.battles.push(battle);
-  });
-
-  return [round];
-}
-
-function drawRounds(rounds) {
-  rounds.forEach((round) => {
-    console.log(`${round.name} (${round.battles.length})`);
-    round.battles.forEach((b) => {
-      console.log(`- ${b.player1.name} > ${b.player2?.name}`);
-    });
-  });
-}
-
-function moveWinnerToNextRound(roomKey, winner) {
-  const { rounds, currentRound } = gameRooms[roomKey];
-  let placed = false;
-  console.log(`currentRound = ${currentRound} rounds = ${rounds.length}`);
-  if (rounds[currentRound].battles?.length > 1) {
-    if (rounds.length <= currentRound + 1) {
-      rounds.push({ name: `Round ${rounds.length + 1}`, battles: [] });
-      console.log(`adding round (${rounds.length}) current=${currentRound}`);
-    }
-    rounds[currentRound + 1].battles.forEach((battle) => {
-      if (!battle.player1 && !placed) {
-        battle.player1 = { ...winner, health: 100 };
-        placed = true;
-      }
-      if (!battle.player2 && !placed) {
-        battle.player2 = { ...winner, health: 100 };
-        placed = true;
-      }
-    });
-    if (!placed) {
-      console.log(`creating a new battle in round ${currentRound + 1}`);
-      rounds[currentRound + 1].battles.push({
-        player1: { ...winner, health: 100 },
-        moves: [],
-        time: 60,
-      });
-      placed = true;
-    }
-  }
-  drawRounds(rounds);
-  return placed;
-}
-
-function getMatchupDescriptions(roomInfo, finalWinner) {
-  const { rounds, currentRound, currentBattle, players } = roomInfo;
-  const matchups = rounds.map((round, r) => {
-    return {
-      name: round.name,
-      battles: round.battles.map((battle, b) => {
-        if (r < currentRound || (r === currentRound && b < currentBattle)) {
-          return battle.winner;
-        }
-        const p1 = battle.player1 ? players[battle.player1.id] : undefined;
-        const p2 = battle.player2 ? players[battle.player2.id] : undefined;
-        if (r > currentRound) {
-          return `${p1?.name ?? "???"} vs. ${p2?.name ?? "???"}`;
-        }
-        return b.resultText ?? `${p1?.name ?? "CPU"} vs. ${p2?.name ?? "CPU"}`;
-      }),
-    };
-  });
-  matchups.push({ name: "Winner", battles: [finalWinner?.name ?? "???"] });
-  return matchups;
+  return Math.floor(Math.random() * (Math.floor(max) - Math.ceil(min)) + Math.ceil(min));
 }
 
 function delay(t, val) {

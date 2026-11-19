@@ -73,34 +73,39 @@ export class Main extends Scene {
 
   create() {
     const scene = this;
+    let startButton: Phaser.GameObjects.Image | undefined;
 
-    this.socket?.on(
-      "roomCreated",
-      (args: { roomKey: string; players: PlayerMap }) => {
-        scene.titleTween?.stop();
-        scene.titleTween?.destroy();
-        scene.title?.destroy();
-        scene.roomKey = args.roomKey;
-        scene.roomKeyText?.setText(`CODE: ${scene.roomKey}`);
-        scene.playerCountText?.setText(
-          `PLAYERS: ${Object.keys(args.players).length}`
-        );
-        const ready = scene.add
-          .image(512, 500, "ready")
-          .setOrigin(0.5, 0)
-          .setInteractive({ cursor: "pointer" })
-          .on("pointerdown", () => {
-            const { roomKey } = scene;
-            scene.socket?.emit("startGame", { roomKey });
-          });
-        ready.on("pointerover", () => {
-          ready.setTint(0xcccccc);
+    // Shows the room code and the host's start button.
+    const becomeHost = (args: { roomKey: string; players: PlayerMap }) => {
+      scene.titleTween?.stop();
+      scene.titleTween?.destroy();
+      scene.title?.destroy();
+      scene.roomKey = args.roomKey;
+      scene.roomKeyText?.setText(`CODE: ${scene.roomKey}`);
+      scene.playerCountText?.setText(
+        `PLAYERS: ${Object.keys(args.players).length}`
+      );
+      if (startButton) return;
+      const ready = scene.add
+        .image(512, 500, "ready")
+        .setOrigin(0.5, 0)
+        .setInteractive({ cursor: "pointer" })
+        .on("pointerdown", () => {
+          const { roomKey } = scene;
+          scene.socket?.emit("startGame", { roomKey });
         });
-        ready.on("pointerout", () => {
-          ready.clearTint();
-        });
-      }
-    );
+      ready.on("pointerover", () => {
+        ready.setTint(0xcccccc);
+      });
+      ready.on("pointerout", () => {
+        ready.clearTint();
+      });
+      startButton = ready;
+    };
+
+    this.socket?.on("roomCreated", becomeHost);
+    // the original host left the lobby and this player took over
+    this.socket?.on("becameHost", becomeHost);
 
     this.socket?.on(
       "roomJoined",
@@ -139,6 +144,8 @@ export class Main extends Scene {
             scene.socket?.off("gameUpdate");
             scene.socket?.off("roomJoined");
             scene.socket?.off("roomCreated");
+            scene.socket?.off("becameHost");
+            scene.socket?.off("roomUpdate");
             scene.scene.start("Fight", {
               roomKey,
               socket,

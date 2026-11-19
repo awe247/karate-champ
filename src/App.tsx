@@ -29,31 +29,41 @@ export const App: React.FC = () => {
   // References to the PhaserGame component (game and scene are exposed)
   const phaserRef = useRef<IRefPhaserGame | null>(null);
 
+  // The socket handlers below are registered once, so they read the player's
+  // current name and colours through this ref rather than a stale closure.
+  const profileRef = useRef({ playerName, hairColor, skinColor, eyeColor, giColor });
+  profileRef.current = { playerName, hairColor, skinColor, eyeColor, giColor };
+
   useEffect(() => {
-    socket?.on("roomCreated", function (roomKey: string) {
-      setJoinedGame(true);
-    });
+    if (!socket) return;
 
-    socket?.on("codeNotValid", function (message: string) {
+    const onJoined = () => setJoinedGame(true);
+    const onCodeNotValid = (message?: string) =>
       setErrorMessage(message ?? "Not a valid code.");
-    });
-
-    socket?.on("codeIsValid", function (joinCode: string) {
+    const onCodeIsValid = (joinCode: string) => {
       setErrorMessage("");
-      const pn = playerName?.length ? playerName : defaultPlayerName;
+      const { playerName, hairColor, eyeColor, skinColor, giColor } =
+        profileRef.current;
       socket.emit("joinRoom", {
-        playerName: pn,
+        playerName: playerName?.trim().length ? playerName : defaultPlayerName,
         joinCode,
         hairColor,
         eyeColor,
         skinColor,
         giColor,
       });
-    });
+    };
 
-    socket?.on("roomJoined", function () {
-      setJoinedGame(true);
-    });
+    socket.on("roomCreated", onJoined);
+    socket.on("roomJoined", onJoined);
+    socket.on("codeNotValid", onCodeNotValid);
+    socket.on("codeIsValid", onCodeIsValid);
+    return () => {
+      socket.off("roomCreated", onJoined);
+      socket.off("roomJoined", onJoined);
+      socket.off("codeNotValid", onCodeNotValid);
+      socket.off("codeIsValid", onCodeIsValid);
+    };
   }, [socket]);
 
   // Event emitted from the PhaserGame component
@@ -78,7 +88,7 @@ export const App: React.FC = () => {
   const handleJoinGame = () => {
     if (!loaded) return;
     setErrorMessage("");
-    socket?.emit("isCodeValid", { joinCode });
+    socket?.emit("isCodeValid", { joinCode: joinCode.trim().toUpperCase() });
   };
 
   return (
@@ -166,7 +176,9 @@ export const App: React.FC = () => {
                   id="join-code"
                   maxLength={5}
                   value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 />
               </div>
               <div className="content-end">
