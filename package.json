@@ -1,9 +1,10 @@
 {
   "name": "karate-champ",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.js\"",
     "build-client": "webpack",
     "build-client-watch": "webpack -w",
     "lint:client": "eslint --config src/.eslintrc.json src/ --ext .ts",

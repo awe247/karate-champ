@@ -32,6 +32,7 @@ export class Fight extends Scene {
   waiting: boolean = true;
   attackPicked: BattleAttack = BattleAttack.None;
   movesSent: boolean = false;
+  gameOver: boolean = false;
   rounds: RoundResult[] = [];
   currentRound: number = 0;
   currentBattle: number = 0;
@@ -93,23 +94,48 @@ export class Fight extends Scene {
     this.battle = data.battle;
     this.timerCount = data.battle.time;
 
-    const { roomKey } = data;
-    document.addEventListener("visibilitychange", () => {
-      console.log(`visibilitychange: ${document.visibilityState}`);
-      if (document.visibilityState === "visible") {
-        this.socket?.emit("needUpdate", { roomKey });
-        this.socket?.on("ready", this.handleReady);
-        this.socket?.on("moveUpdate", this.handleMove);
-        this.socket?.on("battleUpdate", this.handleBattle);
-        this.socket?.on("next", this.handleNext);
-      } else {
-        this.socket?.off("ready");
-        this.socket?.off("moveUpdate");
-        this.socket?.off("battleUpdate");
-        this.socket?.off("next");
-      }
+    // Register the tab-visibility listener once per scene run, and remove it
+    // (and the socket listeners) when the scene shuts down.
+    document.removeEventListener("visibilitychange", this.handleVisibility);
+    document.addEventListener("visibilitychange", this.handleVisibility);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener("visibilitychange", this.handleVisibility);
+      this.socket?.off("ready", this.handleReady);
+      this.socket?.off("next", this.handleNext);
+      this.socket?.off("timeUpdate", this.handleTimeUpdate);
+      this.socket?.off("moveUpdate", this.handleMove);
+      this.socket?.off("battleUpdate", this.handleBattle);
+      this.socket?.off("gameUpdate", this.handleGameUpdate);
+      this.socket?.off("gameOver", this.handleGameOver);
     });
   }
+
+  // While the tab is hidden, animations don't run, so stop listening for
+  // animated updates and ask for the full state when the tab comes back.
+  handleVisibility = () => {
+    console.log(`visibilitychange: ${document.visibilityState}`);
+    if (document.visibilityState === "visible") {
+      this.socket?.emit("needUpdate", { roomKey: this.roomKey });
+      this.socket?.off("ready", this.handleReady).on("ready", this.handleReady);
+      this.socket?.off("moveUpdate", this.handleMove).on("moveUpdate", this.handleMove);
+      this.socket?.off("battleUpdate", this.handleBattle).on("battleUpdate", this.handleBattle);
+      this.socket?.off("next", this.handleNext).on("next", this.handleNext);
+    } else {
+      this.socket?.off("ready", this.handleReady);
+      this.socket?.off("moveUpdate", this.handleMove);
+      this.socket?.off("battleUpdate", this.handleBattle);
+      this.socket?.off("next", this.handleNext);
+    }
+  };
+
+  // Text for a finished battle: KO, time up or forfeit.
+  describeResult = (battle: Battle): string => {
+    const name = battle.winnerName ?? "";
+    const healthP2 = battle.player2?.health ?? battle.cpuHealth ?? 0;
+    if (battle.player1.health <= 0 || healthP2 <= 0) return `${name} wins!`;
+    if (battle.time <= 0) return `Time's up!\n${name} wins`;
+    return `Forfeit!\n${name} wins`;
+  };
 
   preload() {
     this.load.image("ready-title", "assets/readyTitle.png");
@@ -141,6 +167,7 @@ export class Fight extends Scene {
     this.ready = false;
     this.attackPicked = BattleAttack.None;
     this.movesSent = false;
+    this.gameOver = false;
     this.player1KO = false;
     this.player2KO = false;
 
@@ -623,23 +650,7 @@ export class Fight extends Scene {
 
     this.socket?.on("gameUpdate", this.handleGameUpdate);
 
-    this.socket?.on("gameOver", (args: { rounds: RoundResult[] }) => {
-      const { rounds } = args;
-      const { roomKey, socket } = this;
-      this.cameras.main.fadeOut(500, 0, 0, 0);
-      this.cameras.main.once(
-        Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-        () => {
-          scene.scene.start("Matchups", {
-            roomKey,
-            socket,
-            rounds,
-            currentRound: rounds.length - 1,
-            currentBattle: 0,
-          });
-        }
-      );
-    });
+    this.socket?.on("gameOver", this.handleGameOver);
 
     EventBus.emit("current-scene-ready", this);
 
@@ -647,6 +658,27 @@ export class Fight extends Scene {
 
     this.socket?.emit("sendReady", { roomKey, currentRound, currentBattle });
   }
+
+  // Every READY press after the final sends gameOver, so only act on the first.
+  handleGameOver = (args: { rounds: RoundResult[] }) => {
+    if (this.gameOver) return;
+    this.gameOver = true;
+    const { rounds } = args;
+    const { roomKey, socket } = this;
+    this.cameras.main.fadeOut(500, 0, 0, 0);
+    this.cameras.main.once(
+      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
+      () => {
+        this.scene.start("Matchups", {
+          roomKey,
+          socket,
+          rounds,
+          currentRound: rounds.length - 1,
+          currentBattle: 0,
+        });
+      }
+    );
+  };
 
   update() {
     if (!this.player1Moving && !this.player1KO) {
@@ -706,6 +738,7 @@ export class Fight extends Scene {
     this.currentBattle = currentBattle;
     this.battle = battle;
     this.timerCount = battle.time;
+    this.readyButton?.setVisible(false);
 
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(
@@ -889,8 +922,9 @@ export class Fight extends Scene {
       this.attackPicked = BattleAttack.None;
     }
 
-    if (battle.time <= 0) {
-      this.winnerText?.setText("Time's up!");
+    // Ended without a final blow (time up or forfeit): show the result now.
+    if (!sequence && battle.winner) {
+      this.winnerText?.setText(this.describeResult(battle));
       this.readyButton?.setVisible(true);
     }
 
@@ -902,6 +936,19 @@ export class Fight extends Scene {
     // no animation or anything in here. this is just a state update if the browser was inactive and
     // missed other messages
     const { battle, rounds, currentRound, currentBattle, waiting } = args;
+
+    // The tournament moved on while this tab was hidden (or this client was
+    // behind): show the new battle as if "next" had arrived.
+    if (
+      battle.ready &&
+      !battle.winner &&
+      (currentRound !== this.currentRound || currentBattle !== this.currentBattle)
+    ) {
+      this.ready = true;
+      this.handleNext(args);
+      return;
+    }
+
     if (waiting !== undefined) {
       this.waiting = waiting;
     }
@@ -945,7 +992,7 @@ export class Fight extends Scene {
           }
         }
         createPlayerTexture(this, battle?.player2);
-        this.player1Sprite?.setTexture(battle.player2?.id ?? "cpu");
+        this.player2Sprite?.setTexture(battle.player2?.id ?? "cpu");
         if (!this.anims.exists(`${battle?.player2?.id ?? "cpu"}-idle`)) {
           this.anims.create({
             key: `${battle?.player2?.id ?? "cpu"}-idle`,
@@ -1000,19 +1047,10 @@ export class Fight extends Scene {
         this.player2Sprite?.anims.stop();
         this.player2Sprite?.setFrame(PlayerFrame.KO);
       }
-      if (!this.waiting) {
-        this.readyButton?.setVisible(true);
-        const winner = this.player1KO
-          ? this.battle?.player2?.name ?? "CPU"
-          : this.battle?.player1.name;
-        this.winnerText?.setText(`${winner} wins!`);
-      }
     }
-    if (this.timerCount <= 0) {
-      if (!this.waiting) {
-        this.readyButton?.setVisible(true);
-        this.winnerText?.setText("Time's up!");
-      }
+    if (battle.winner && !this.waiting) {
+      this.readyButton?.setVisible(true);
+      this.winnerText?.setText(this.describeResult(battle));
     }
     this.showPlayerInput();
   };
@@ -1270,7 +1308,9 @@ export class Fight extends Scene {
 
   setPlayer2Health = (health: number) => {
     if (this.battle?.player2) {
-      this.battle.player1.health = health;
+      this.battle.player2.health = health;
+    } else if (this.battle) {
+      this.battle.cpuHealth = health;
     }
   };
 

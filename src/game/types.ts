@@ -59,5 +59,6 @@ export interface Battle {
   time: number;
   cpuHealth: number;
   winner: string;
+  winnerName?: string;
   ready: boolean;
 }

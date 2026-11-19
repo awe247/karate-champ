@@ -1,7 +1,8 @@
 import { createContext } from "react";
 import socketIOClient, { Socket } from "socket.io-client";
 
-//export const ENDPOINT = "http://localhost:8080"; // Update with your server's URL
-export const ENDPOINT = "https://karate-champ.onrender.com";
-export const socket = socketIOClient(ENDPOINT);
+// The page is served by the game server itself (server/index.js), so connect
+// back to wherever it was loaded from: localhost in dev, the deployed host in
+// production.
+export const socket = socketIOClient();
 export const SocketContext = createContext<{ socket: Socket } | null>(null);
